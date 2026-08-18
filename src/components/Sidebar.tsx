@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 const mainNav = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Audit", href: "/audit", icon: Activity },
   { label: "Optimization", href: "/optimization", icon: Sparkles },
   { label: "Content", href: "/content", icon: PenLine },
@@ -27,7 +27,7 @@ const mainNav = [
 
 const secondaryNav = [
   { label: "AI Assistant", href: "/assistant", icon: HelpCircle },
-  { label: "Rapports", href: "/reports", icon: FileText },
+  { label: "Reports", href: "/reports", icon: FileText },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 

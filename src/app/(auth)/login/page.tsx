@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, BarChart3, PenLine, Calendar, Eye, EyeOff } from "lucide-react";
+import { Sparkles, BarChart3, PenLine, Calendar, Eye, EyeOff, Loader2 } from "lucide-react";
 
 type Mode = "signin" | "signup";
 
@@ -10,14 +10,71 @@ export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Form states matching OAuth2 spec
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    router.push("/");
+    setLoading(true);
+    setError(null);
+
+    const baseUrl = process.env.NEXT_PUBLIC_AUTH_API_URL || "";
+
+    try {
+      if (mode === "signin") {
+        const formData = new URLSearchParams();
+        formData.append("username", username);
+        formData.append("password", password);
+
+        const response = await fetch(`${baseUrl}/api/users/token`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formData.toString(),
+        });
+
+        if (!response.ok) {
+          throw new Error("Invalid email or password");
+        }
+
+        const data = await response.json();
+        
+        if (data.access_token) {
+          localStorage.setItem("token", data.access_token);
+        }
+
+        router.push("/dashboard");
+      } else {
+        const response = await fetch(`${baseUrl}/api/users/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            full_name: fullName,
+            email: username,
+            password: password,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Registration failed. Email might already be taken.");
+        }
+
+        setMode("signin");
+      }
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    /* Changed bg-[#eef1f5] to bg-white below */
     <div className="flex min-h-screen items-center justify-center bg-white p-6">
       <div className="grid w-full max-w-4xl grid-cols-1 overflow-hidden rounded-2xl border border-[#e3e6ea] bg-white shadow-sm md:grid-cols-2">
         {/* Left panel */}
@@ -38,8 +95,7 @@ export default function LoginPage() {
           </h1>
 
           <p className="mb-8 text-sm leading-relaxed text-white/60">
-            Audit your company page, generate content, and track performance
-            — all in one place.
+            Audit your company page, generate content, and track performance — all in one place.
           </p>
 
           <div className="flex flex-col gap-2.5">
@@ -69,26 +125,39 @@ export default function LoginPage() {
               : "Start optimizing your LinkedIn presence today"}
           </p>
 
-          {/* Tab switcher */}
+          {/* Error Alert */}
+          {error && (
+            <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-600">
+              {error}
+            </div>
+          )}
+
+          {/* Tab switcher - Positioned outside form */}
           <div className="mb-6 flex rounded-full border border-[#e3e6ea] bg-[#f5f6f8] p-1">
             <button
               type="button"
-              onClick={() => setMode("signin")}
-              className={`flex-1 rounded-full py-2 text-sm font-semibold transition-colors ${
+              onClick={() => {
+                setMode("signin");
+                setError(null);
+              }}
+              className={`flex-1 rounded-full py-2 text-sm font-semibold transition-all duration-200 ${
                 mode === "signin"
-                  ? "bg-[#4a7aa8] text-white"
-                  : "text-[#4b5563]"
+                  ? "bg-[#4a7aa8] text-white shadow-sm"
+                  : "text-[#4b5563] hover:text-[#1a2332]"
               }`}
             >
               Sign in
             </button>
             <button
               type="button"
-              onClick={() => setMode("signup")}
-              className={`flex-1 rounded-full py-2 text-sm font-semibold transition-colors ${
+              onClick={() => {
+                setMode("signup");
+                setError(null);
+              }}
+              className={`flex-1 rounded-full py-2 text-sm font-semibold transition-all duration-200 ${
                 mode === "signup"
-                  ? "bg-[#4a7aa8] text-white"
-                  : "text-[#4b5563]"
+                  ? "bg-[#4a7aa8] text-white shadow-sm"
+                  : "text-[#4b5563] hover:text-[#1a2332]"
               }`}
             >
               Create account
@@ -103,6 +172,9 @@ export default function LoginPage() {
                 </label>
                 <input
                   type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   placeholder="John Doe"
                   className="w-full rounded-lg border border-[#d7dbe0] bg-white px-3.5 py-2.5 text-sm text-[#1a2332] placeholder:text-[#9aa2ab] focus:border-[#4a7aa8] focus:outline-none focus:ring-1 focus:ring-[#4a7aa8]"
                 />
@@ -115,7 +187,10 @@ export default function LoginPage() {
               </label>
               <input
                 type="email"
-                placeholder="nom@entreprise.com"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="admin@admin.com"
                 className="w-full rounded-lg border border-[#d7dbe0] bg-white px-3.5 py-2.5 text-sm text-[#1a2332] placeholder:text-[#9aa2ab] focus:border-[#4a7aa8] focus:outline-none focus:ring-1 focus:ring-[#4a7aa8]"
               />
             </div>
@@ -127,6 +202,9 @@ export default function LoginPage() {
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   className="w-full rounded-lg border border-[#d7dbe0] bg-white px-3.5 py-2.5 pr-10 text-sm text-[#1a2332] placeholder:text-[#9aa2ab] focus:border-[#4a7aa8] focus:outline-none focus:ring-1 focus:ring-[#4a7aa8]"
                 />
@@ -148,35 +226,12 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="mt-2 w-full rounded-lg bg-[#4a7aa8] py-3 text-sm font-semibold text-white transition-colors hover:bg-[#3f6a94]"
+              disabled={loading}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#4a7aa8] py-3 text-sm font-semibold text-white transition-colors hover:bg-[#3f6a94] disabled:opacity-50"
             >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {mode === "signin" ? "Sign in" : "Sign up"}
             </button>
-
-            {mode === "signup" && (
-              <p className="text-center text-sm text-[#6b7280]">
-                Already have an account?{" "}
-                <button
-                  type="button"
-                  onClick={() => setMode("signin")}
-                  className="font-medium text-[#4a7aa8]"
-                >
-                  Sign in
-                </button>
-              </p>
-            )}
-
-            <p className="mt-1 text-center text-xs text-[#9aa2ab]">
-              By {mode === "signin" ? "signing in" : "signing up"}, you agree
-              to our{" "}
-              <a href="#" className="text-[#4a7aa8]">
-                Terms of Use
-              </a>{" "}
-              and{" "}
-              <a href="#" className="text-[#4a7aa8]">
-                Privacy Policy
-              </a>
-            </p>
           </form>
         </div>
       </div>
