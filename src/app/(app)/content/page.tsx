@@ -20,47 +20,82 @@ import {
   ThumbsUp,
   MessageSquare,
   Globe,
+  AlertCircle,
 } from "lucide-react";
+
+const API_RESPONSE_DATA = {
+  type_contenu: "etude_de_cas",
+  titre_interne:
+    "Migration ERP en environnement critique : le cas d’un acteur agroalimentaire",
+  variantes: [
+    {
+      angle: "Approche technique et sécurisée pour éviter l’interruption de production",
+      contenu:
+        "Dans l’agroalimentaire, une migration ERP ne tolère aucune improvisation.\n\nUn de nos clients du secteur faisait face à un défi majeur : son ERP, devenu obsolète, menaçait la continuité de sa chaîne de production. Une bascule mal maîtrisée aurait pu entraîner un arrêt coûteux et prolongé.\n\nNotre réponse ? Une migration progressive, module par module, couplée à la mise en place d’un environnement de secours opérationnel. Cette approche a permis de :\n- Maintenir la production en continu pendant toute la durée du projet\n- Limiter les risques techniques liés à la bascule\n- Valider chaque étape avant de passer à la suivante\n\nRésultat : [résultat chiffré].\n\nUne preuve que même les projets ERP les plus critiques peuvent être menés à bien avec une méthodologie adaptée aux enjeux industriels.\n\nVous préparez une migration ERP dans un environnement sensible ? Parlons-en.",
+      hashtags: [
+        "#ERP",
+        "#Agroalimentaire",
+        "#TransformationDigitale",
+        "#Industrie",
+        "#ConseilIT",
+      ],
+      cta: "Échangeons sur vos enjeux de migration ERP [lien à compléter]",
+    },
+    {
+      angle: "Focus sur la méthodologie adaptée aux contraintes industrielles",
+      contenu:
+        "Quand un ERP devient un risque pour la production, la migration ne peut pas être traitée comme un projet standard.\n\nPour [nom du client], acteur du secteur agroalimentaire, l’obsolescence de son système représentait une menace directe sur sa chaîne de production. L’enjeu ? Éviter tout arrêt, même temporaire.\n\nNotre méthodologie a reposé sur trois piliers :\n- Une analyse préalable des modules critiques pour la production\n- La création d’un environnement de secours garantissant la continuité des opérations\n- Une migration par étapes, avec des tests en conditions réelles avant chaque bascule\n\nCette approche sur-mesure a permis de sécuriser le projet sans compromettre l’activité.\n\nRésultat : [résultat chiffré].\n\nUn exemple concret de notre expertise en accompagnement ERP pour les industries à flux tendus.\n\nBesoin d’une stratégie adaptée à vos contraintes opérationnelles ? Contactez-nous.",
+      hashtags: [
+        "#ERPIndustriel",
+        "#ContinuiteOperationnelle",
+        "#ConseilEnTransformation",
+        "#PMEIndustrielles",
+        "#TechnologieCritique",
+      ],
+      cta: "Découvrez comment sécuriser votre migration ERP [lien à compléter]",
+    },
+  ],
+  marqueurs_acompleter: [
+    "[résultat chiffré]",
+    "[lien à compléter]",
+    "[nom du client]",
+  ],
+};
 
 export default function GenerationPage() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
 
-  // Form State matching /api/generations request payload
+  // Form State
   const [formData, setFormData] = useState({
-    topic: "Why 80% of B2B companies fail at LinkedIn lead generation in 2026",
-    format: "Thought Leadership",
-    tone: "Authoritative & Educational",
-    targetAudience: "CMOs & Marketing Directors",
+    topic: "Accompagnement d’un client agroalimentaire dans sa migration ERP",
+    format: "Case Study",
+    tone: "Professionnel & Expert",
+    targetAudience: "PME et ETI industrielles",
     includeCTA: true,
   });
 
-  const [generatedPost, setGeneratedPost] = useState<any>(null);
+  // Pre-loaded initial state so you can preview without clicking generate
+  const [generatedPost, setGeneratedPost] = useState<typeof API_RESPONSE_DATA | null>(API_RESPONSE_DATA);
 
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Simulated response matching POST /api/generations schema from Cahier IA
     setTimeout(() => {
-      setGeneratedPost({
-        format: formData.format,
-        hook: "Most B2B companies treat LinkedIn like a press release feed. That's why 80% fail to generate real enterprise pipeline.",
-        body: `Here are 3 fundamental shifts we executed at [Company Name] to turn cold connections into active sales conversations:\n\n1. Stop posting features, start documenting problems.\nDecision-makers don't care about your product update. They care about fixing their current operational headache.\n\n2. Shift from corporate page to founder authority.\nPeople trust leaders, not logos. Executive posts consistently achieve 4x higher reach than company updates.\n\n3. Structure posts for skimmability.\nIf your hook doesn't grab attention in the first 2 lines, 90% of your audience scrolls past.\n\nWhat is your team's biggest challenge with LinkedIn content right now?`,
-        cta: "Drop your thoughts below or DM me 'STRATEGY' for our free playbook. 👇",
-        hashtags: ["#B2BMarketing", "#LinkedInStrategy", "#GrowthHacking", "#DemandGen"],
-        characterCount: 840,
-        estimatedReadTime: "45 sec",
-        carouselSlideCount: formData.format === "Carousel Blueprint" ? 5 : null,
-      });
+      setGeneratedPost(API_RESPONSE_DATA);
+      setSelectedVariantIndex(0);
       setLoading(false);
-    }, 1200);
+    }, 800);
   };
 
+  const currentVariant = generatedPost?.variantes[selectedVariantIndex];
+
   const handleCopyFullPost = () => {
-    if (!generatedPost) return;
-    const fullContent = `${generatedPost.hook}\n\n${generatedPost.body}\n\n${generatedPost.cta}\n\n${generatedPost.hashtags.join(" ")}`;
+    if (!currentVariant) return;
+    const fullContent = `${currentVariant.contenu}\n\n${currentVariant.cta}\n\n${currentVariant.hashtags.join(" ")}`;
     navigator.clipboard.writeText(fullContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -75,46 +110,43 @@ export default function GenerationPage() {
             AI Content Generator
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Create high-engaging LinkedIn posts, carousel blueprints, and case studies tailored to your industry.
+            Générez des posts LinkedIn, études de cas et sous-formats optimisés pour vos cibles industrielles.
           </p>
         </div>
         <Link
           href="/calendar"
           className="inline-flex items-center gap-2 rounded-xl bg-[#4a7aa8] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#3f6a94]"
         >
-          Schedule to Calendar <ArrowRight className="h-3.5 w-3.5" />
+          Planifier au calendrier <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-        {/* Left Column: Brief Input & AI Settings */}
+        {/* Left Column: Form Parameters */}
         <div className="flex flex-col gap-6 lg:col-span-5">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
               <PenSquare className="h-5 w-5 text-[#4a7aa8]" />
-              <h2 className="text-base font-bold text-slate-900">Content Prompt & Parameters</h2>
+              <h2 className="text-base font-bold text-slate-900">Paramètres & Brief Stratégique</h2>
             </div>
 
             <form onSubmit={handleGenerate} className="space-y-4">
-              {/* Topic / Prompt */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Topic / Strategic Brief
+                  Sujet du Brief
                 </label>
                 <textarea
                   rows={4}
                   required
                   value={formData.topic}
                   onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-                  placeholder="e.g., How to optimize B2B sales pipelines using AI tools..."
                   className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none transition-all focus:border-[#4a7aa8] focus:ring-1 focus:ring-[#4a7aa8]"
                 />
               </div>
 
-              {/* Content Format Selector */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Content Format
+                  Format de Contenu
                 </label>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {[
@@ -143,27 +175,24 @@ export default function GenerationPage() {
                 </div>
               </div>
 
-              {/* Tone Selection */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Tone of Voice
+                  Tonalité
                 </label>
                 <select
                   value={formData.tone}
                   onChange={(e) => setFormData({ ...formData, tone: e.target.value })}
                   className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs font-medium outline-none transition-all focus:border-[#4a7aa8]"
                 >
-                  <option>Authoritative & Educational</option>
-                  <option>Bold & Direct</option>
-                  <option>Storytelling & Vulnerable</option>
-                  <option>Analytical & Data-Backed</option>
+                  <option>Professionnel & Expert</option>
+                  <option>Direct & Orienté Résultats</option>
+                  <option>Inspirant & Visionnaire</option>
                 </select>
               </div>
 
-              {/* Target Audience */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Target Persona / Audience
+                  Cible / Audience
                 </label>
                 <input
                   type="text"
@@ -181,12 +210,12 @@ export default function GenerationPage() {
                 {loading ? (
                   <>
                     <RefreshCw className="h-4 w-4 animate-spin" />
-                    Crafting LinkedIn Post...
+                    Génération en cours...
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    Generate Content Draft
+                    Générer les variantes
                   </>
                 )}
               </button>
@@ -194,18 +223,43 @@ export default function GenerationPage() {
           </div>
         </div>
 
-        {/* Right Column: Live LinkedIn Post Preview & Inspector */}
+        {/* Right Column: Pre-rendered Preview */}
         <div className="flex flex-col gap-6 lg:col-span-7">
-          {generatedPost ? (
+          {generatedPost && currentVariant ? (
             <div className="space-y-4">
+              {/* Internal Title Header */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#4a7aa8]">
+                  Titre interne
+                </span>
+                <h3 className="text-sm font-bold text-slate-900 mt-0.5">
+                  {generatedPost.titre_interne}
+                </h3>
+              </div>
+
+              {/* Variant Selector Tabs */}
+              <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                {generatedPost.variantes.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedVariantIndex(idx)}
+                    className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-all ${
+                      selectedVariantIndex === idx
+                        ? "bg-[#4a7aa8] text-white shadow-sm"
+                        : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    Variante {idx + 1}
+                  </button>
+                ))}
+              </div>
+
               {/* Toolbar */}
               <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
-                <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
-                  <span>Format: <strong className="text-slate-800">{generatedPost.format}</strong></span>
-                  <span>•</span>
-                  <span>Est. Read: <strong className="text-slate-800">{generatedPost.estimatedReadTime}</strong></span>
+                <div className="text-xs font-medium text-slate-500 pr-2">
+                  Angle : <strong className="text-slate-800">{currentVariant.angle}</strong>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => setSaved(!saved)}
                     className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
@@ -213,43 +267,56 @@ export default function GenerationPage() {
                     }`}
                   >
                     <Bookmark className="h-3.5 w-3.5" />
-                    {saved ? "Saved" : "Save Draft"}
+                    {saved ? "Sauvegardé" : "Sauvegarder"}
                   </button>
                   <button
                     onClick={handleCopyFullPost}
                     className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-slate-800"
                   >
                     {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? "Copied to Clipboard!" : "Copy Post"}
+                    {copied ? "Copié !" : "Copier le post"}
                   </button>
                 </div>
               </div>
 
+              {/* Missing Fields Alert Chip */}
+              {generatedPost.marqueurs_acompleter.length > 0 && (
+                <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                  <span>
+                    Champs à compléter :{" "}
+                    <strong>{generatedPost.marqueurs_acompleter.join(", ")}</strong>
+                  </span>
+                </div>
+              )}
+
               {/* LinkedIn Native Style Mock Preview */}
               <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
-                {/* Mock User Header */}
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4a7aa8] font-bold text-white text-sm">
-                    3LM
+                    NC
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">3LM Solutions • Executive Post</h4>
+                    <h4 className="text-xs font-bold text-slate-900">Nexalys Conseil • Expert ERP</h4>
                     <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                      1m • <Globe className="h-3 w-3" />
+                      À l'instant • <Globe className="h-3 w-3" />
                     </p>
                   </div>
                 </div>
 
                 {/* Main Post Body */}
-                <div className="mt-4 space-y-3 text-xs text-slate-800 leading-relaxed font-sans">
-                  <p className="font-bold text-slate-900 text-sm leading-snug">{generatedPost.hook}</p>
-                  <p className="whitespace-pre-line">{generatedPost.body}</p>
-                  <p className="font-semibold text-[#4a7aa8]">{generatedPost.cta}</p>
+                <div className="mt-4 space-y-3 text-xs text-slate-800 leading-relaxed whitespace-pre-line">
+                  {currentVariant.contenu}
                 </div>
 
-                {/* Hashtag List */}
+                {/* CTA Callout */}
+                <div className="mt-4 p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs font-semibold text-[#4a7aa8]">
+                  {currentVariant.cta}
+                </div>
+
+                {/* Hashtags */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
-                  {generatedPost.hashtags.map((tag: string, idx: number) => (
+                  {currentVariant.hashtags.map((tag: string, idx: number) => (
                     <span key={idx} className="inline-flex items-center text-xs font-semibold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md">
                       <Hash className="h-3 w-3 mr-0.5" />
                       {tag.replace("#", "")}
@@ -257,26 +324,16 @@ export default function GenerationPage() {
                   ))}
                 </div>
 
-                {/* Mock Feed Interactions Footer */}
+                {/* Feed Footer */}
                 <div className="mt-6 pt-3 border-t border-slate-100 flex items-center justify-between text-slate-400 text-xs font-semibold">
-                  <button className="flex items-center gap-1 hover:text-slate-600"><ThumbsUp className="h-4 w-4" /> Like</button>
-                  <button className="flex items-center gap-1 hover:text-slate-600"><MessageSquare className="h-4 w-4" /> Comment</button>
-                  <button className="flex items-center gap-1 hover:text-slate-600"><Share2 className="h-4 w-4" /> Repost</button>
-                  <button className="flex items-center gap-1 hover:text-slate-600"><Send className="h-4 w-4" /> Send</button>
+                  <button className="flex items-center gap-1 hover:text-slate-600"><ThumbsUp className="h-4 w-4" /> J'aime</button>
+                  <button className="flex items-center gap-1 hover:text-slate-600"><MessageSquare className="h-4 w-4" /> Commenter</button>
+                  <button className="flex items-center gap-1 hover:text-slate-600"><Share2 className="h-4 w-4" /> Partager</button>
+                  <button className="flex items-center gap-1 hover:text-slate-600"><Send className="h-4 w-4" /> Envoyer</button>
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="flex h-96 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <h3 className="mt-4 text-base font-bold text-slate-900">No Post Draft Generated</h3>
-              <p className="mt-1 max-w-sm text-xs text-slate-500">
-                Fill in the topic prompt and parameters on the left and click "Generate Content Draft" to view your post preview.
-              </p>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

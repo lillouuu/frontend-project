@@ -4,324 +4,423 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   Wand2,
-  Sparkles,
-  Check,
   Copy,
-  ArrowRight,
-  RefreshCw,
-  Sliders,
-  ShieldCheck,
+  Check,
+  AlertTriangle,
   CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  Layers,
-  SlidersHorizontal,
+  Star,
+  Sparkles,
+  ArrowRight,
+  Info,
+  Building2,
+  Target,
+  ShieldAlert,
 } from "lucide-react";
 
-export default function OptimizationPage() {
-  const [loading, setLoading] = useState(false);
-  const [selectedField, setSelectedField] = useState("company_slogan");
-  const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [appliedId, setAppliedId] = useState<number | null>(null);
+// --- Données d'exemple correspondant à la réponse du test O1 ---
+const OPTIMIZATION_API_RESPONSE = {
+  type_element: "slogan",
+  contenu_original: "",
+  faiblesses_corrigees: [
+    "Absence totale de contenu initial",
+    "Manque de clarté sur le secteur d’activité",
+    "Absence de proposition de valeur",
+    "Cible client non définie",
+    "Positionnement inexistant",
+  ],
+  variantes: [
+    {
+      angle: "orienteexpertisetechnique",
+      contenu:
+        "Nexalys Conseil accompagne les entreprises dans l'optimisation de leurs processus métiers grâce à l'intégration d'ERP performants.\n\nNotre expertise couvre l'ensemble du cycle d'intégration : analyse des besoins, paramétrage, déploiement et formation des équipes.\n\nNous intervenons auprès de [secteursclientsprincipaux] pour leur permettre de gagner en efficacité opérationnelle, en visibilité sur leurs données et en agilité.\n\nNotre approche sur-mesure garantit des solutions alignées avec vos enjeux business et vos contraintes techniques.",
+      explication:
+        "Cette variante met en avant l'expertise technique de Nexalys Conseil en détaillant les étapes clés de l'intégration ERP. Elle cible les décideurs IT et opérationnels en soulignant les bénéfices concrets (efficacité, visibilité, agilité). Les mots-clés comme 'intégration ERP', 'processus métiers' et 'déploiement' sont intégrés naturellement pour le référencement.",
+    },
+    {
+      angle: "orientebnficesclients",
+      contenu:
+        "Chez Nexalys Conseil, nous transformons vos défis opérationnels en opportunités grâce à des solutions ERP adaptées.\n\nQue vous soyez une PME en croissance ou un groupe international, notre mission est de simplifier votre gestion quotidienne, d'automatiser vos processus et de vous fournir des données fiables pour prendre des décisions claires.\n\nAvec [nombredannesdexprience] années d'expérience dans l'intégration ERP, nous avons aidé [nombredeclients] entreprises :\n- Réduire leurs coûts opérationnels ;\n- Accélérer leurs délais de traitement ;\n- Améliorer la collaboration entre services.\n\nNotre engagement : des résultats mesurables, sans perturbation de votre activité.",
+      explication:
+        "Cette variante adopte une approche centrée sur les bénéfices clients, en listant des résultats concrets (réduction des coûts, accélération des délais). Elle utilise un ton engageant et rassurant, idéal pour les dirigeants et responsables opérationnels. Les mots-clés comme 'solutions ERP', 'automatisation' et 'décisions claires' sont intégrés pour renforcer la visibilité.",
+    },
+    {
+      angle: "orienteconfianceet proximit",
+      contenu:
+        "Nexalys Conseil, c'est avant tout une équipe de passionnés dédiée à la réussite de vos projets ERP.\n\nNous croyons que la technologie doit servir vos ambitions, pas les complexifier. C'est pourquoi nous privilégions une relation de proximité, basée sur l'écoute et la transparence, pour vous proposer des solutions ERP qui s'intègrent parfaitement à votre organisation.\n\nNotre méthode :\n1. Comprendre vos enjeux spécifiques ;\n2. Co-construire une solution sur-mesure ;\n3. Vous accompagner jusqu'à l'adoption totale par vos équipes.\n\nParce que chaque entreprise est unique, nous adaptons notre expertise à vos besoins, et non l'inverse.",
+      explication:
+        "Cette variante mise sur la relation client et la proximité, en insistant sur l'écoute et la co-construction. Elle est particulièrement adaptée pour les entreprises recherchant un partenaire de confiance plutôt qu'un simple prestataire. Les mots-clés comme 'projets ERP', 'solutions sur-mesure' et 'accompagnement' sont utilisés pour capter l'attention des décideurs en quête de fiabilité.",
+    },
+  ],
+  marqueurs: [
+    "[secteursclientsprincipaux]",
+    "[nombredannesdexprience]",
+    "[nombredeclients]",
+  ],
+  ameliorations_apportees: [
+    "Création d'une description structurée et professionnelle",
+    "Intégration naturelle des mots-clés métier (ERP, intégration, processus métiers, etc.)",
+    "Mise en avant des bénéfices clients pour chaque variante",
+    "Adaptation du ton à un public B2B (professionnel, clair et orienté résultats)",
+    "Respect des contraintes de longueur (moins de 2000 caractères)",
+  ],
+  variante_recommandee: {
+    angle: "orientebnficesclients",
+    raison:
+      "Cette variante est la plus efficace pour capter l'attention des décideurs B2B, car elle met directement en avant les résultats concrets et les gains pour l'entreprise. Elle répond aux attentes des clients en quête de solutions ERP qui améliorent leur performance opérationnelle, tout en restant accessible et engageante.",
+  },
+};
 
-  // Form State
-  const [fieldInput, setFieldInput] = useState({
-    currentText: "We provide IT services and custom software for businesses.",
-    targetAudience: "B2B SaaS Founders & CTOs",
-    tone: "Professional & Authoritative",
+export default function OptimizationPage() {
+  // --- Champs du corps de la requête POST /api/optimisations ---
+  const [typeElement, setTypeElement] = useState("slogan");
+  const [contenuActuel, setContenuActuel] = useState("");
+  const [tonSouhaite, setTonSouhaite] = useState("professionnel");
+
+  // Champs obligatoires : contexte_entreprise
+  const [contexte, setContexte] = useState({
+    nom: "Nexalys Conseil",
+    secteur: "Conseil IT & Intégration ERP",
+    cible_client: "PME & Groupes Internationaux (Décideurs IT)",
+    services: "Intégration ERP, Analyse de besoins, Formation",
+    positionnement: "Expertise sur-mesure & accompagnement de proximité",
   });
 
-  const [variations, setVariations] = useState<any[]>([]);
+  // Champs utiles : resultat_audit
+  const [resultatAudit] = useState({
+    critere_code: "slogan",
+    niveau: 1,
+    justification_audit:
+      "Absence totale de proposition de valeur et positionnement inexistant sur le profil.",
+    recommandation_id: "reco_001",
+  });
 
-  const handleGenerateVariations = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  // --- États pour l'affichage de l'interface ---
+  const [copiedAngle, setCopiedAngle] = useState<string | null>(null);
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(1);
+  const [data] = useState(OPTIMIZATION_API_RESPONSE);
+  const [isLoading, setIsLoading] = useState(false);
 
-    setTimeout(() => {
-      setVariations([
-        {
-          id: 1,
-          angle: "Authority & Market Leadership",
-          badgeStyle: "bg-sky-50 text-sky-700 border-sky-200",
-          text: "Engineering High-Performance B2B Software Solutions That Scale Tech Infrastructure 3x Faster.",
-          characterCount: 97,
-          impactScore: "+38% engagement predicted",
-          reasoning: "Uses action-driven verbs and quantifies business speed to instantly establish credibility.",
-        },
-        {
-          id: 2,
-          angle: "Result & Conversion-Oriented",
-          badgeStyle: "bg-emerald-50 text-emerald-700 border-emerald-200",
-          text: "We Build Enterprise-Grade Cloud & Custom Software So Tech Leaders Can Focus On Growth.",
-          characterCount: 92,
-          impactScore: "+45% click-through predicted",
-          reasoning: "Directly addresses the primary target audience pain point and outcome.",
-        },
-        {
-          id: 3,
-          angle: "Modern & Minimalist",
-          badgeStyle: "bg-purple-50 text-purple-700 border-purple-200",
-          text: "Architecting Next-Generation IT Infrastructure for Ambitious Digital Enterprises.",
-          characterCount: 84,
-          impactScore: "+25% clarity predicted",
-          reasoning: "Sleek, high-concept positioning tailored for modern tech decision-makers.",
-        },
-      ]);
-      setLoading(false);
-    }, 1100);
+  const currentVariant = data.variantes[selectedVariantIndex];
+
+  const handleCopy = (text: string, angle: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedAngle(angle);
+    setTimeout(() => setCopiedAngle(null), 2000);
   };
 
-  const handleCopy = (id: number, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const handleRunOptimization = () => {
+    // Structure exacte envoyée au backend POST /api/optimisations
+    const requestBody = {
+      type_element: typeElement,
+      contenu_actuel: contenuActuel,
+      resultat_audit: resultatAudit,
+      contexte_entreprise: {
+        nom: contexte.nom,
+        secteur: contexte.secteur,
+        cible_client: contexte.cible_client,
+        services: contexte.services.split(",").map((s) => s.trim()),
+        positionnement: contexte.positionnement,
+        ton_souhaite: tonSouhaite,
+      },
+    };
+
+    console.log("Envoi de la requête POST /api/optimisations :", requestBody);
+    setIsLoading(true);
+    setTimeout(() => setIsLoading(false), 1200); // Simulation de latence réseau
   };
 
   return (
-    <div className="min-h-screen bg-white p-10 font-sans text-slate-800">
-      {/* Breadcrumb & Page Header */}
-      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div className="min-h-screen bg-[#f8fafc] p-8 font-sans text-slate-800">
+      {/* En-tête de la page */}
+      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <nav className="mb-2 text-xs font-medium text-slate-400">
-            Workspace / <span className="text-slate-600 font-semibold">Optimization Engine</span>
-          </nav>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            AI Profile & Page Optimization
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Optimisation IA du Profil & de la Page
           </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Transformez vos champs LinkedIn peu performants en textes à forte conversion grâce à des angles stratégiques personnalisés.
+          </p>
         </div>
         <Link
           href="/generation"
-          className="inline-flex items-center gap-2 rounded-xl bg-[#4a7aa8] px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:bg-[#3f6a94]"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#4a7aa8] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#3f6a94]"
         >
-          Next: Content Generator <ArrowRight className="h-4 w-4" />
+          Suivant : Générer du Contenu <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
 
-      {/* KPI Stat Cards Row */}
-      <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="relative rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <SlidersHorizontal className="absolute right-6 top-6 h-5 w-5 text-slate-300" />
-          <span className="text-xs font-medium text-slate-400">Target Field</span>
-          <div className="mt-2 text-xl font-black text-slate-900 capitalize truncate">
-            {selectedField.replace("_", " ")}
+      {/* Bannière du résultat de l'audit (resultat_audit) */}
+      <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4 shadow-sm flex items-start gap-3">
+        <ShieldAlert className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-amber-900 uppercase tracking-wider text-[10px]">
+              Défaut Identifié par l'Audit (Niveau {resultatAudit.niveau})
+            </span>
+            <span className="rounded bg-amber-200/60 px-1.5 py-0.5 text-[10px] font-mono text-amber-800">
+              {resultatAudit.recommandation_id}
+            </span>
           </div>
-          <span className="mt-1 block text-xs font-medium text-slate-500">Active target selection</span>
-        </div>
-
-        <div className="relative rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <Layers className="absolute right-6 top-6 h-5 w-5 text-slate-300" />
-          <span className="text-xs font-medium text-slate-400">Strategic Angles</span>
-          <div className="mt-2 text-3xl font-black text-slate-900">
-            {variations.length > 0 ? `${variations.length} Options` : "3 Ready"}
-          </div>
-          <span className="mt-1 block text-xs font-medium text-slate-500">AI rewrite variations</span>
-        </div>
-
-        <div className="relative rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <TrendingUp className="absolute right-6 top-6 h-5 w-5 text-slate-300" />
-          <span className="text-xs font-medium text-slate-400">Avg Predicted Lift</span>
-          <div className="mt-2 text-3xl font-black text-slate-900">+36%</div>
-          <span className="mt-1 block text-xs font-medium text-slate-500">Based on AI strategy</span>
-        </div>
-
-        <div className="relative rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <CheckCircle2 className="absolute right-6 top-6 h-5 w-5 text-slate-300" />
-          <span className="text-xs font-medium text-slate-400">Optimization Status</span>
-          <div className="mt-2 text-3xl font-black text-slate-900">
-            {appliedId ? "Option Applied" : variations.length > 0 ? "Variants Ready" : "Pending"}
-          </div>
-          <span className="mt-1 block text-xs font-medium text-slate-500">Current workflow phase</span>
+          <p className="mt-1 font-medium text-amber-900">
+            {resultatAudit.justification_audit}
+          </p>
         </div>
       </div>
 
-      {/* Two-Column Grid */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-        {/* Left Column: Selector & Settings */}
-        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] lg:col-span-5">
-          <div className="mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
-            <Sliders className="h-4 w-4 text-[#4a7aa8]" />
-            <h2 className="text-base font-bold text-slate-900">Target Field Settings</h2>
-          </div>
+        {/* Colonne Gauche : Paramètres et Contexte Entreprise (Données POST) */}
+        <div className="flex flex-col gap-6 lg:col-span-5">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-5">
+            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Target className="h-4 w-4 text-[#4a7aa8]" /> Paramètres d'Optimisation
+            </h2>
 
-          <form onSubmit={handleGenerateVariations} className="space-y-4">
+            {/* Type d'élément */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Select Field to Optimize
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Type Élément <span className="text-red-500">*</span>
               </label>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {[
-                  { id: "company_slogan", label: "Company Slogan" },
-                  { id: "company_about", label: "Company Description" },
-                  { id: "executive_headline", label: "Executive Headline" },
-                  { id: "executive_bio", label: "Executive Bio / About" },
-                ].map((field) => (
+                  { id: "slogan", label: "Slogan" },
+                  { id: "description_entreprise", label: "Description" },
+                  { id: "headline", label: "Titre Exécutif" },
+                  { id: "about", label: "À propos / Bio" },
+                ].map((item) => (
                   <button
-                    key={field.id}
+                    key={item.id}
                     type="button"
-                    onClick={() => setSelectedField(field.id)}
-                    className={`rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-all ${
-                      selectedField === field.id
-                        ? "border-[#4a7aa8] bg-[#4a7aa8]/5 text-[#4a7aa8]"
-                        : "border-slate-100 bg-white text-slate-600 hover:bg-slate-50"
+                    onClick={() => setTypeElement(item.id)}
+                    className={`rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${
+                      typeElement === item.id
+                        ? "border-[#4a7aa8] bg-[#4a7aa8]/10 text-[#4a7aa8]"
+                        : "border-slate-200 bg-slate-50/50 text-slate-600 hover:bg-slate-100"
                     }`}
                   >
-                    {field.label}
+                    {item.label}
                   </button>
                 ))}
               </div>
             </div>
 
+            {/* Contenu Actuel (Gère le mode création si vide) */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Current Draft / Original Text
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Contenu Actuel
+                </label>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  {contenuActuel.trim() === "" ? "Mode Création" : "Mode Amélioration"}
+                </span>
+              </div>
               <textarea
                 rows={3}
-                value={fieldInput.currentText}
-                onChange={(e) => setFieldInput({ ...fieldInput, currentText: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none transition-all focus:border-[#4a7aa8]"
-                placeholder="Paste your current text here..."
+                placeholder="Laissez vide pour créer un nouveau contenu (Mode Création)..."
+                value={contenuActuel}
+                onChange={(e) => setContenuActuel(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 outline-none focus:border-[#4a7aa8] focus:bg-white transition-all"
               />
             </div>
 
+            {/* Ton Souhaité */}
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Target Audience
-              </label>
-              <input
-                type="text"
-                value={fieldInput.targetAudience}
-                onChange={(e) => setFieldInput({ ...fieldInput, targetAudience: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none transition-all focus:border-[#4a7aa8]"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Brand Tone
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Ton Souhaité
               </label>
               <select
-                value={fieldInput.tone}
-                onChange={(e) => setFieldInput({ ...fieldInput, tone: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs font-medium outline-none transition-all focus:border-[#4a7aa8]"
+                value={tonSouhaite}
+                onChange={(e) => setTonSouhaite(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700 outline-none focus:border-[#4a7aa8] focus:bg-white transition-all"
               >
-                <option>Professional & Authoritative</option>
-                <option>Bold & Action-Oriented</option>
-                <option>Relatable & Conversational</option>
-                <option>Innovative & Visionary</option>
+                <option value="professionnel">Professionnel (Par défaut)</option>
+                <option value="engageant">Engageant & Dynamique</option>
+                <option value="autoritaire">Expert & Autoritaire</option>
+                <option value="accessible">Inspirant & Accessible</option>
               </select>
             </div>
 
+            <hr className="border-slate-100" />
+
+            {/* Contexte Entreprise (Champs obligatoires) */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5 text-[#4a7aa8]" /> Contexte Entreprise <span className="text-red-500">*</span>
+              </h3>
+
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Nom de l'entreprise</label>
+                <input
+                  type="text"
+                  value={contexte.nom}
+                  onChange={(e) => setContexte({ ...contexte, nom: e.target.value })}
+                  className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Secteur d'activité</label>
+                <input
+                  type="text"
+                  value={contexte.secteur}
+                  onChange={(e) => setContexte({ ...contexte, secteur: e.target.value })}
+                  className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Cible client</label>
+                <input
+                  type="text"
+                  value={contexte.cible_client}
+                  onChange={(e) => setContexte({ ...contexte, cible_client: e.target.value })}
+                  className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Services (séparés par des virgules)</label>
+                <input
+                  type="text"
+                  value={contexte.services}
+                  onChange={(e) => setContexte({ ...contexte, services: e.target.value })}
+                  className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-slate-500 font-medium">Positionnement</label>
+                <input
+                  type="text"
+                  value={contexte.positionnement}
+                  onChange={(e) => setContexte({ ...contexte, positionnement: e.target.value })}
+                  className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
+                />
+              </div>
+            </div>
+
             <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-xs font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50"
+              type="button"
+              onClick={handleRunOptimization}
+              disabled={isLoading}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#4a7aa8] py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#3f6a94] disabled:opacity-50"
             >
-              {loading ? (
-                <>
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  Generating Options...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="h-4 w-4" />
-                  Generate 3 Optimized Variants
-                </>
-              )}
+              <Wand2 className="h-4 w-4" />
+              {isLoading ? "Génération en cours..." : "Lancer l'Optimisation"}
             </button>
-          </form>
+          </div>
         </div>
 
-        {/* Right Column: Preview & Results */}
+        {/* Colonne Droite : Résultats (3 Variantes + Recommandation) */}
         <div className="flex flex-col gap-6 lg:col-span-7">
-          {/* Active Comparison Preview Card */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Live Before & After Preview
-            </h3>
-            <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50/40 p-4">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800">
-                <AlertCircle className="h-4 w-4" /> Original Version
+          {/* Carte de la Variante Recommandée */}
+          <div className="rounded-2xl border border-[#4a7aa8]/30 bg-[#4a7aa8]/5 p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#4a7aa8]">
+              <Star className="h-4 w-4 fill-[#4a7aa8]" />
+              Variante Recommandée par l'IA :{" "}
+              <span className="underline">{data.variante_recommandee.angle}</span>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-slate-700">
+              {data.variante_recommandee.raison}
+            </p>
+          </div>
+
+          {/* Onglets de sélection des variantes */}
+          <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+            {data.variantes.map((v, idx) => {
+              const isRec = v.angle === data.variante_recommandee.angle;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedVariantIndex(idx)}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all ${
+                    selectedVariantIndex === idx
+                      ? "bg-[#4a7aa8] text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>Variante {idx + 1}</span>
+                  {isRec && (
+                    <span className="rounded bg-amber-400 px-1 py-0.2 text-[9px] font-extrabold text-slate-900 uppercase">
+                      Top
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Notification pour les marqueurs/placeholders */}
+          {data.marqueurs.length > 0 && (
+            <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
+              <Info className="h-4 w-4 flex-shrink-0 text-sky-600" />
+              <span>
+                Marqueurs à personnaliser dans le texte :{" "}
+                <strong>{data.marqueurs.join(", ")}</strong>
+              </span>
+            </div>
+          )}
+
+          {/* Contenu de la variante active */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Angle stratégique
+                </span>
+                <h4 className="text-sm font-bold text-slate-900 capitalize">
+                  {currentVariant.angle}
+                </h4>
               </div>
-              <p className="mt-1 text-xs font-medium text-slate-700">"{fieldInput.currentText}"</p>
+
+              <button
+                onClick={() =>
+                  handleCopy(currentVariant.contenu, currentVariant.angle)
+                }
+                className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-slate-800"
+              >
+                {copiedAngle === currentVariant.angle ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                {copiedAngle === currentVariant.angle
+                  ? "Copié !"
+                  : "Copier la variante"}
+              </button>
+            </div>
+
+            {/* Texte généré */}
+            <div className="rounded-xl bg-slate-50/70 p-4 border border-slate-100 text-xs leading-relaxed text-slate-800 whitespace-pre-line font-sans">
+              {currentVariant.contenu}
+            </div>
+
+            {/* Explication stratégique & SEO */}
+            <div className="pt-2">
+              <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 text-[#4a7aa8]" /> Explication
+                & SEO :
+              </span>
+              <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                {currentVariant.explication}
+              </p>
             </div>
           </div>
 
-          {/* AI Output Cards Feed or Empty State */}
-          {variations.length > 0 ? (
-            <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Recommended AI Strategic Angles
-              </h3>
-              {variations.map((variant) => (
-                <div
-                  key={variant.id}
-                  className={`relative rounded-2xl border bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all ${
-                    appliedId === variant.id ? "border-emerald-500 ring-1 ring-emerald-500" : "border-slate-100"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <span className={`rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${variant.badgeStyle}`}>
-                      {variant.angle}
-                    </span>
-                    <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600">
-                      {variant.impactScore}
-                    </span>
-                  </div>
-
-                  <p className="mt-4 text-sm font-bold text-slate-900 leading-relaxed">
-                    "{variant.text}"
-                  </p>
-
-                  <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                    <strong className="text-slate-700">AI Logic:</strong> {variant.reasoning}
-                  </p>
-
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-400">
-                    <span>{variant.characterCount} Characters</span>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleCopy(variant.id, variant.text)}
-                        className="inline-flex items-center gap-1.5 font-semibold text-slate-600 hover:text-slate-900"
-                      >
-                        {copiedId === variant.id ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copiedId === variant.id ? "Copied" : "Copy"}
-                      </button>
-
-                      <button
-                        onClick={() => setAppliedId(variant.id)}
-                        className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
-                          appliedId === variant.id
-                            ? "bg-emerald-600 text-white"
-                            : "bg-[#4a7aa8] text-white hover:bg-[#3f6a94]"
-                        }`}
-                      >
-                        {appliedId === variant.id ? <CheckCircle2 className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                        {appliedId === variant.id ? "Selected" : "Apply Option"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+          {/* Liste des améliorations apportées */}
+          <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-6 shadow-sm">
+            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-900">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              Améliorations Apportées
+            </h3>
+            <ul className="mt-3 space-y-2 text-xs text-emerald-900/80">
+              {data.ameliorations_apportees.map((item, idx) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <Check className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 mt-0.5" />
+                  <span>{item}</span>
+                </li>
               ))}
-            </div>
-          ) : (
-            /* Standardized Empty State */
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-100 bg-white p-12 text-center shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <h3 className="mt-4 text-base font-bold text-slate-900">No Variations Generated</h3>
-              <p className="mt-1 max-w-sm text-xs text-slate-400">
-                Choose a target field on the left and click "Generate 3 Optimized Variants" to compare strategic options.
-              </p>
-              <button
-                onClick={handleGenerateVariations}
-                className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#4a7aa8] px-4 py-2.5 text-xs font-bold text-white transition-all hover:bg-[#3f6a94]"
-              >
-                <Wand2 className="h-4 w-4" /> Run Rewrite Engine
-              </button>
-            </div>
-          )}
+            </ul>
+          </div>
         </div>
       </div>
     </div>
