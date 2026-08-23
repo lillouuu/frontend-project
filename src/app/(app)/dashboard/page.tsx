@@ -8,95 +8,127 @@ import {
   Zap,
   ArrowUpRight,
   Activity,
-  AlertTriangle,
   CheckCircle2,
   ChevronRight,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
+import { useAudit } from "@/hooks/useAudit";
 
-const stats = [
-  {
-    label: "LinkedIn Score",
-    value: "63",
-    sub: "/ 100",
-    badge: "Intermediate",
-    badgeStyle: "bg-amber-50 text-amber-700 border border-amber-200",
-    icon: BarChart3,
-    link: "/audit",
-    linkLabel: "View audit",
-  },
-  {
-    label: "Followers",
-    value: "670",
-    sub: "+60 this month",
-    badge: "Live",
-    badgeStyle: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-    icon: Users,
-    link: null,
-    linkLabel: null,
-  },
-  {
-    label: "Engagement Rate",
-    value: "3.2%",
-    sub: "+0.4% vs last month",
-    badge: "Active",
-    badgeStyle: "bg-sky-50 text-sky-700 border border-sky-200",
-    icon: TrendingUp,
-    link: null,
-    linkLabel: null,
-  },
-  {
-    label: "Posts this month",
-    value: "4",
-    sub: "Target: 8",
-    badge: "Below target",
-    badgeStyle: "bg-rose-50 text-rose-700 border border-rose-200",
-    icon: Activity,
-    link: "/content",
-    linkLabel: "Generate content",
-  },
-];
+// ---------------------------------------------------------------------------
+// Not everything on this page comes from the audit endpoint. Followers,
+// engagement rate, and posts-this-month aren't part of the /api/audits
+// response schema — there's no documented endpoint for them yet. Kept as
+// static placeholders until that exists; ask the team if/where this data
+// will come from (probably a separate "company stats" endpoint).
+// ---------------------------------------------------------------------------
+const STATIC_STATS = {
+  followers: { value: "670", sub: "+60 this month" },
+  engagement: { value: "3.2%", sub: "+0.4% vs last month" },
+  postsThisMonth: { value: "4", sub: "Target: 8" },
+};
 
-const recommendations = [
-  {
-    level: "CRITICAL",
-    text: "Complete the manager profile — title, bio, experience and skills are all missing",
-    href: "/optimization",
-    style: "text-rose-700 bg-rose-50 border-rose-200",
-    dot: "bg-rose-500",
-  },
-  {
-    level: "IMPORTANT",
-    text: "Publish content regularly as the company manager to build personal branding",
-    href: "/content",
-    style: "text-amber-700 bg-amber-50 border-amber-200",
-    dot: "bg-amber-500",
-  },
-  {
-    level: "OPTIMIZATION",
-    text: "Add differentiating elements to the company description",
-    href: "/optimization",
-    style: "text-emerald-700 bg-emerald-50 border-emerald-200",
-    dot: "bg-emerald-500",
-  },
-];
+const categoryLabels: Record<string, string> = {
+  page_entreprise: "Company page",
+  activite_engagement: "Activity & engagement",
+  dirigeant: "Manager profile",
+  coherence: "Manager / company alignment",
+};
 
-const categories = [
-  { name: "Company page", score: 100, color: "bg-emerald-500" },
-  { name: "Activity & engagement", score: 50, color: "bg-amber-500" },
-  { name: "Manager profile", score: 0, color: "bg-rose-500" },
-  { name: "Manager / company alignment", score: 0, color: "bg-rose-500" },
-];
+const categoryColor = (pct: number) =>
+  pct >= 75 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-500" : "bg-rose-500";
 
 export default function Dashboard() {
+  const { auditData, recommendations, loading, isFallback } = useAudit();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span className="text-sm font-medium">Loading dashboard...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Flat shape now — no more nested "score" object. Recommendations come
+  // from the hook directly (separate real entity), not analyse_ia.
+  const scoreValue = auditData?.score_global ?? 0;
+  const categories = auditData?.score_detail.sous_scores_categories ?? [];
+  const scoreBadge =
+    scoreValue >= 80 ? "Advanced" : scoreValue >= 50 ? "Intermediate" : "Needs work";
+  const scoreBadgeStyle =
+    scoreValue >= 80
+      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+      : scoreValue >= 50
+      ? "bg-amber-50 text-amber-700 border border-amber-200"
+      : "bg-rose-50 text-rose-700 border border-rose-200";
+
+  const stats = [
+    {
+      label: "LinkedIn Score",
+      value: String(scoreValue),
+      sub: "/ 100",
+      badge: scoreBadge,
+      badgeStyle: scoreBadgeStyle,
+      icon: BarChart3,
+      link: "/audit",
+      linkLabel: "View audit",
+    },
+    {
+      label: "Followers",
+      value: STATIC_STATS.followers.value,
+      sub: STATIC_STATS.followers.sub,
+      badge: "Live",
+      badgeStyle: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+      icon: Users,
+      link: null,
+      linkLabel: null,
+    },
+    {
+      label: "Engagement Rate",
+      value: STATIC_STATS.engagement.value,
+      sub: STATIC_STATS.engagement.sub,
+      badge: "Active",
+      badgeStyle: "bg-sky-50 text-sky-700 border border-sky-200",
+      icon: TrendingUp,
+      link: null,
+      linkLabel: null,
+    },
+    {
+      label: "Posts this month",
+      value: STATIC_STATS.postsThisMonth.value,
+      sub: STATIC_STATS.postsThisMonth.sub,
+      badge: "Below target",
+      badgeStyle: "bg-rose-50 text-rose-700 border border-rose-200",
+      icon: Activity,
+      link: "/content",
+      linkLabel: "Generate content",
+    },
+  ];
+
+  const recStyle = (priorite: string) =>
+    priorite === "CRITIQUE" || priorite === "CRITICAL"
+      ? { style: "text-rose-700 bg-rose-50 border-rose-200", dot: "bg-rose-500" }
+      : priorite === "IMPORTANTE"
+      ? { style: "text-amber-700 bg-amber-50 border-amber-200", dot: "bg-amber-500" }
+      : { style: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" };
+
   return (
     <div className="min-h-screen bg-white px-8 py-6 font-sans">
-
       <div className="mb-8 flex items-start justify-between">
         <div>
           <p className="mb-1 text-xs font-medium text-slate-400">Workspace / Dashboard</p>
-          <h1 className="text-2xl font-bold text-slate-900">Good morning, 3LM Solutions</h1>
-          <p className="mt-1 text-sm text-slate-500">Here's your LinkedIn presence overview for today.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Good morning</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Here's your LinkedIn presence overview for today.
+          </p>
+          {isFallback && (
+            <span className="mt-2 inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
+              Showing sample data — backend unreachable
+            </span>
+          )}
         </div>
         <Link
           href="/audit"
@@ -140,7 +172,6 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 flex flex-col gap-6">
-
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="mb-5 flex items-center justify-between">
               <div>
@@ -155,11 +186,16 @@ export default function Dashboard() {
               {categories.map((cat, i) => (
                 <div key={i}>
                   <div className="mb-1.5 flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-700">{cat.name}</span>
-                    <span className="font-bold text-slate-900">{cat.score}%</span>
+                    <span className="font-medium text-slate-700">
+                      {categoryLabels[cat.code] ?? cat.libelle}
+                    </span>
+                    <span className="font-bold text-slate-900">{cat.pourcentage}%</span>
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div className={`h-full rounded-full ${cat.color} transition-all duration-700`} style={{ width: `${cat.score}%` }} />
+                    <div
+                      className={`h-full rounded-full ${categoryColor(cat.pourcentage)} transition-all duration-700`}
+                      style={{ width: `${cat.pourcentage}%` }}
+                    />
                   </div>
                 </div>
               ))}
@@ -172,23 +208,34 @@ export default function Dashboard() {
                 <h2 className="text-base font-bold text-slate-900">Priority recommendations</h2>
                 <p className="text-xs text-slate-400">Actions ranked by impact on your score</p>
               </div>
-              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">3 pending</span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500">
+                {recommendations.length} pending
+              </span>
             </div>
             <div className="flex flex-col gap-3">
-              {recommendations.map((rec, i) => (
-                <Link
-                  key={i}
-                  href={rec.href}
-                  className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4 transition hover:bg-slate-100/60"
-                >
-                  <div className={`h-2 w-2 flex-shrink-0 rounded-full ${rec.dot}`} />
-                  <span className={`flex-shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${rec.style}`}>
-                    {rec.level}
-                  </span>
-                  <span className="flex-1 text-sm text-slate-700">{rec.text}</span>
-                  <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
-                </Link>
-              ))}
+              {recommendations.map((rec) => {
+                const { style, dot } = recStyle(rec.priorite);
+                const params = new URLSearchParams({
+                  recommendation_id: rec.id,
+                  critere_code: rec.critere_code,
+                  action: rec.action,
+                  raison: rec.raison,
+                }).toString();
+                return (
+                  <Link
+                    key={rec.id}
+                    href={`/optimization?${params}`}
+                    className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4 transition hover:bg-slate-100/60"
+                  >
+                    <div className={`h-2 w-2 flex-shrink-0 rounded-full ${dot}`} />
+                    <span className={`flex-shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style}`}>
+                      {rec.priorite}
+                    </span>
+                    <span className="flex-1 text-sm text-slate-700">{rec.action}</span>
+                    <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-300" />
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -223,24 +270,26 @@ export default function Dashboard() {
           <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-base font-bold text-slate-900">Last audit</h2>
-              <span className="text-xs text-slate-400">Jul 22, 2026</span>
             </div>
             <div className="mb-4 flex items-center gap-4">
               <div className="relative flex h-16 w-16 items-center justify-center">
                 <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
                   <path stroke="#f1f5f9" strokeWidth="3.5" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                  <path stroke="#f59e0b" strokeDasharray="63, 100" strokeWidth="3.5" strokeLinecap="round" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  <path
+                    stroke={scoreValue >= 75 ? "#10b981" : "#f59e0b"}
+                    strokeDasharray={`${scoreValue}, 100`}
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
                 </svg>
-                <span className="absolute text-base font-black text-slate-900">63</span>
+                <span className="absolute text-base font-black text-slate-900">{scoreValue}</span>
               </div>
               <div>
-                <div className="text-sm font-semibold text-slate-900">Intermediate</div>
+                <div className="text-sm font-semibold text-slate-900">{scoreBadge}</div>
                 <div className="text-xs text-slate-400">Global score</div>
               </div>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50/60 p-3">
-              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-rose-500" />
-              <span className="text-xs font-medium text-rose-700">Manager profile is empty — caps your score at 70%</span>
             </div>
             <Link
               href="/audit"

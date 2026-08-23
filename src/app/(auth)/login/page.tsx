@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, BarChart3, PenLine, Calendar, Eye, EyeOff, Loader2 } from "lucide-react";
+import { getMyCompanies } from "@/lib/api/company";
 
 type Mode = "signin" | "signup";
 
@@ -10,11 +11,11 @@ export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("signin");
   const [showPassword, setShowPassword] = useState(false);
-  
-  // Form states matching OAuth2 spec
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [accountName, setAccountName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +24,11 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const baseUrl = process.env.NEXT_PUBLIC_AUTH_API_URL || "";
+    // Same base URL as everything else now that we know it's one backend
+    // (the Java AI service is internal-only, the frontend never talks to
+    // it directly) — falls back to the old env var name for compatibility.
+    const baseUrl =
+      process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_AUTH_API_URL || "";
 
     try {
       if (mode === "signin") {
@@ -44,20 +49,49 @@ export default function LoginPage() {
         }
 
         const data = await response.json();
-        
+
+        // The real backend issues both an access token AND a refresh
+        // token (per its README). Storing both — the access token for
+        // normal requests, the refresh token for getting a new access
+        // token once this one expires (not yet wired anywhere, but the
+        // value needs to be saved now or it's lost).
         if (data.access_token) {
           localStorage.setItem("token", data.access_token);
         }
+        if (data.refresh_token) {
+          localStorage.setItem("refresh_token", data.refresh_token);
+        }
 
-        router.push("/dashboard");
+        // First-time users (no company yet) go to onboarding; returning
+        // users with a company already set up skip straight to the
+        // dashboard. Also fixes a separate gap: company_id used to only
+        // get set during onboarding itself, so a returning user on a
+        // fresh browser session had none at all until now.
+        try {
+          const companies = await getMyCompanies();
+          if (companies.length > 0) {
+            localStorage.setItem("company_id", companies[0].id);
+            router.push("/dashboard");
+          } else {
+            router.push("/onboarding/company");
+          }
+        } catch (err) {
+          console.warn("Could not check existing companies, defaulting to onboarding:", err);
+          router.push("/onboarding/company");
+        }
       } else {
-        const response = await fetch(`${baseUrl}/api/users/register`, {
+        // FIX: the real endpoint is /api/users/create, not
+        // /api/users/register — this was silently broken before.
+        // Also requires account_name — confirmed against the real
+        // backend/schemas/userschema.py UserCreate schema.
+        const response = await fetch(`${baseUrl}/api/users/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             full_name: fullName,
             email: username,
             password: password,
+            account_name: accountName,
           }),
         });
 
@@ -125,14 +159,12 @@ export default function LoginPage() {
               : "Start optimizing your LinkedIn presence today"}
           </p>
 
-          {/* Error Alert */}
           {error && (
             <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-medium text-rose-600">
               {error}
             </div>
           )}
 
-          {/* Tab switcher - Positioned outside form */}
           <div className="mb-6 flex rounded-full border border-[#e3e6ea] bg-[#f5f6f8] p-1">
             <button
               type="button"
@@ -176,6 +208,22 @@ export default function LoginPage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="John Doe"
+                  className="w-full rounded-lg border border-[#d7dbe0] bg-white px-3.5 py-2.5 text-sm text-[#1a2332] placeholder:text-[#9aa2ab] focus:border-[#4a7aa8] focus:outline-none focus:ring-1 focus:ring-[#4a7aa8]"
+                />
+              </div>
+            )}
+
+            {mode === "signup" && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-[#1a2332]">
+                  Workspace / Company Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="e.g. 3LM Solutions"
                   className="w-full rounded-lg border border-[#d7dbe0] bg-white px-3.5 py-2.5 text-sm text-[#1a2332] placeholder:text-[#9aa2ab] focus:border-[#4a7aa8] focus:outline-none focus:ring-1 focus:ring-[#4a7aa8]"
                 />
               </div>

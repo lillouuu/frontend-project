@@ -22,76 +22,76 @@ import {
   Globe,
   AlertCircle,
 } from "lucide-react";
+import { useGeneration } from "@/hooks/useGeneration";
 
-const API_RESPONSE_DATA = {
-  type_contenu: "etude_de_cas",
-  titre_interne:
-    "Migration ERP en environnement critique : le cas d’un acteur agroalimentaire",
-  variantes: [
-    {
-      angle: "Approche technique et sécurisée pour éviter l’interruption de production",
-      contenu:
-        "Dans l’agroalimentaire, une migration ERP ne tolère aucune improvisation.\n\nUn de nos clients du secteur faisait face à un défi majeur : son ERP, devenu obsolète, menaçait la continuité de sa chaîne de production. Une bascule mal maîtrisée aurait pu entraîner un arrêt coûteux et prolongé.\n\nNotre réponse ? Une migration progressive, module par module, couplée à la mise en place d’un environnement de secours opérationnel. Cette approche a permis de :\n- Maintenir la production en continu pendant toute la durée du projet\n- Limiter les risques techniques liés à la bascule\n- Valider chaque étape avant de passer à la suivante\n\nRésultat : [résultat chiffré].\n\nUne preuve que même les projets ERP les plus critiques peuvent être menés à bien avec une méthodologie adaptée aux enjeux industriels.\n\nVous préparez une migration ERP dans un environnement sensible ? Parlons-en.",
-      hashtags: [
-        "#ERP",
-        "#Agroalimentaire",
-        "#TransformationDigitale",
-        "#Industrie",
-        "#ConseilIT",
-      ],
-      cta: "Échangeons sur vos enjeux de migration ERP [lien à compléter]",
-    },
-    {
-      angle: "Focus sur la méthodologie adaptée aux contraintes industrielles",
-      contenu:
-        "Quand un ERP devient un risque pour la production, la migration ne peut pas être traitée comme un projet standard.\n\nPour [nom du client], acteur du secteur agroalimentaire, l’obsolescence de son système représentait une menace directe sur sa chaîne de production. L’enjeu ? Éviter tout arrêt, même temporaire.\n\nNotre méthodologie a reposé sur trois piliers :\n- Une analyse préalable des modules critiques pour la production\n- La création d’un environnement de secours garantissant la continuité des opérations\n- Une migration par étapes, avec des tests en conditions réelles avant chaque bascule\n\nCette approche sur-mesure a permis de sécuriser le projet sans compromettre l’activité.\n\nRésultat : [résultat chiffré].\n\nUn exemple concret de notre expertise en accompagnement ERP pour les industries à flux tendus.\n\nBesoin d’une stratégie adaptée à vos contraintes opérationnelles ? Contactez-nous.",
-      hashtags: [
-        "#ERPIndustriel",
-        "#ContinuiteOperationnelle",
-        "#ConseilEnTransformation",
-        "#PMEIndustrielles",
-        "#TechnologieCritique",
-      ],
-      cta: "Découvrez comment sécuriser votre migration ERP [lien à compléter]",
-    },
-  ],
-  marqueurs_acompleter: [
-    "[résultat chiffré]",
-    "[lien à compléter]",
-    "[nom du client]",
-  ],
+// Maps the UI's format buttons to the type_contenu values the API expects
+// (per cahier de passation section 2.3). "Product Launch" isn't in the
+// documented examples — using "annonce" as a best guess; confirm with
+// Stagiaire 3 if there's an exact value for it.
+const FORMAT_TO_TYPE_CONTENU: Record<string, string> = {
+  "Thought Leadership": "publication",
+  "Case Study": "etude_de_cas",
+  "Carousel Blueprint": "carrousel",
+  "Product Launch": "annonce",
+};
+
+// ---------------------------------------------------------------------------
+// contexte_entreprise (nom, secteur, services, positionnement) isn't
+// collected anywhere in the current onboarding forms yet — same gap as the
+// audit's company_id. Using the same placeholder company from the cahier de
+// passation's own generation test case so the demo stays consistent.
+// Replace with real company profile data once onboarding is wired.
+// ---------------------------------------------------------------------------
+const PLACEHOLDER_COMPANY = {
+  nom: "Nexalys Conseil",
+  secteur: "Conseil en technologies de l'information",
+  services: ["Intégration ERP", "Conseil en transformation digitale"],
+  positionnement: "Cabinet spécialisé dans les projets ERP critiques pour l'industrie",
 };
 
 export default function GenerationPage() {
-  const [loading, setLoading] = useState(false);
+  const { data: generatedPost, loading, isFallback, generate } = useGeneration();
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
 
-  // Form State
   const [formData, setFormData] = useState({
-    topic: "Accompagnement d’un client agroalimentaire dans sa migration ERP",
+    topic: "Accompagnement d'un client agroalimentaire dans sa migration ERP",
     format: "Case Study",
     tone: "Professionnel & Expert",
     targetAudience: "PME et ETI industrielles",
     includeCTA: true,
   });
 
-  // Pre-loaded initial state so you can preview without clicking generate
-  const [generatedPost, setGeneratedPost] = useState<typeof API_RESPONSE_DATA | null>(API_RESPONSE_DATA);
-
-  const handleGenerate = (e: React.FormEvent) => {
+  const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSelectedVariantIndex(0);
 
-    setTimeout(() => {
-      setGeneratedPost(API_RESPONSE_DATA);
-      setSelectedVariantIndex(0);
-      setLoading(false);
-    }, 800);
+    // FIX: company_id was missing entirely — the real GenerationCreate
+    // schema requires it.
+    const companyId =
+      typeof window !== "undefined" ? localStorage.getItem("company_id") || "" : "";
+
+    await generate({
+      company_id: companyId,
+      type_contenu: FORMAT_TO_TYPE_CONTENU[formData.format] ?? "publication",
+      brief: {
+        sujet: formData.topic,
+        objectif: "expertise",
+      },
+      contexte_entreprise: {
+        nom: PLACEHOLDER_COMPANY.nom,
+        secteur: PLACEHOLDER_COMPANY.secteur,
+        cible_client: formData.targetAudience,
+        services: PLACEHOLDER_COMPANY.services,
+        positionnement: PLACEHOLDER_COMPANY.positionnement,
+        ton_souhaite: formData.tone,
+      },
+    });
   };
 
-  const currentVariant = generatedPost?.variantes[selectedVariantIndex];
+  // variantes is wrapped per the real schema — { variantes: [...] }
+  const currentVariant = generatedPost?.variantes.variantes[selectedVariantIndex];
 
   const handleCopyFullPost = () => {
     if (!currentVariant) return;
@@ -112,6 +112,11 @@ export default function GenerationPage() {
           <p className="mt-1 text-sm text-slate-500">
             Générez des posts LinkedIn, études de cas et sous-formats optimisés pour vos cibles industrielles.
           </p>
+          {isFallback && (
+            <span className="mt-2 inline-block rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-700">
+              Showing sample data — backend unreachable
+            </span>
+          )}
         </div>
         <Link
           href="/calendar"
@@ -223,7 +228,7 @@ export default function GenerationPage() {
           </div>
         </div>
 
-        {/* Right Column: Pre-rendered Preview */}
+        {/* Right Column: Preview */}
         <div className="flex flex-col gap-6 lg:col-span-7">
           {generatedPost && currentVariant ? (
             <div className="space-y-4">
@@ -239,7 +244,7 @@ export default function GenerationPage() {
 
               {/* Variant Selector Tabs */}
               <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-                {generatedPost.variantes.map((_, idx) => (
+                {generatedPost.variantes.variantes.map((_, idx) => (
                   <button
                     key={idx}
                     onClick={() => setSelectedVariantIndex(idx)}
@@ -280,12 +285,12 @@ export default function GenerationPage() {
               </div>
 
               {/* Missing Fields Alert Chip */}
-              {generatedPost.marqueurs_acompleter.length > 0 && (
+              {(generatedPost.marqueurs_a_completer?.length ?? 0) > 0 && (
                 <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                   <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
                   <span>
                     Champs à compléter :{" "}
-                    <strong>{generatedPost.marqueurs_acompleter.join(", ")}</strong>
+                    <strong>{generatedPost.marqueurs_a_completer?.join(", ")}</strong>
                   </span>
                 </div>
               )}
@@ -297,7 +302,7 @@ export default function GenerationPage() {
                     NC
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">Nexalys Conseil • Expert ERP</h4>
+                    <h4 className="text-xs font-bold text-slate-900">{PLACEHOLDER_COMPANY.nom} • Expert ERP</h4>
                     <p className="text-[11px] text-slate-400 flex items-center gap-1">
                       À l'instant • <Globe className="h-3 w-3" />
                     </p>
@@ -333,7 +338,11 @@ export default function GenerationPage() {
                 </div>
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="flex h-full min-h-[300px] items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-sm text-slate-400">
+              Remplissez le brief et cliquez sur "Générer les variantes"
+            </div>
+          )}
         </div>
       </div>
     </div>

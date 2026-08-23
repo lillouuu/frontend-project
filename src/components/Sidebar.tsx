@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Activity,
@@ -33,9 +33,41 @@ const secondaryNav = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  const handleLogout = async () => {
+    // Confirmed against the real backend: POST /api/users/logout revokes
+    // the refresh token server-side. It expects { refresh_token } in the
+    // body and returns 204. Best-effort — if it fails (backend down,
+    // token already invalid), we still clear local state and log out on
+    // the frontend regardless, since staying "logged in" locally with a
+    // dead session helps no one.
+    const refreshToken = localStorage.getItem("refresh_token");
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+
+    if (refreshToken) {
+      try {
+        await fetch(`${baseUrl}/api/users/logout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+      } catch (err) {
+        console.warn("Server-side logout failed, clearing local session anyway:", err);
+      }
+    }
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("company_id");
+    localStorage.removeItem("onboarding_entreprise");
+    localStorage.removeItem("onboarding_dirigeant");
+    localStorage.removeItem("linkedin_data");
+    router.push("/login");
+  };
 
   return (
     // Fixed to the viewport: this sidebar never scrolls, only <main> does.
@@ -112,7 +144,13 @@ export default function Sidebar() {
           <div className="text-[12px] font-medium">Ruben Septimus</div>
           <div className="text-[10px] text-white/50">Pro Plan</div>
         </div>
-        <LogOut size={15} className="text-white/50" />
+        <button
+          onClick={handleLogout}
+          className="text-white/50 hover:text-white/90 transition-colors"
+          aria-label="Log out"
+        >
+          <LogOut size={15} />
+        </button>
       </div>
     </aside>
   );
