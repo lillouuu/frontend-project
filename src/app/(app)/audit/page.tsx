@@ -50,7 +50,10 @@ export default function AuditPage() {
     );
   }
 
-  const { score_global, score_entreprise, score_dirigeant, score_detail, analyse_ia } = auditData;
+  const { score_global, score_entreprise, score_detail, analyse_ia } = auditData;
+  // score_dirigeant is nullable on the backend (no manager profile submitted) —
+  // fall back to 0 so the gauge/bar don't render "null%".
+  const score_dirigeant = auditData.score_dirigeant ?? 0;
 
   // Filter recommendations based on tab selection — recommendations now
   // come from the hook (a separate real entity), not analyse_ia.
