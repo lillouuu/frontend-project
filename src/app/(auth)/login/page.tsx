@@ -24,67 +24,16 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    // Same base URL as everything else now that we know it's one backend
-    // (the Java AI service is internal-only, the frontend never talks to
-    // it directly) — falls back to the old env var name for compatibility.
+    // Fallback to absolute backend URL if env vars are missing
     const baseUrl =
-      process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_AUTH_API_URL || "";
+      process.env.NEXT_PUBLIC_API_URL ||
+      process.env.NEXT_PUBLIC_AUTH_API_URL ||
+      "http://localhost:8000";
 
     try {
-      if (mode === "signin") {
-        const formData = new URLSearchParams();
-        formData.append("username", username);
-        formData.append("password", password);
-
-        const response = await fetch(`${baseUrl}/api/users/token`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: formData.toString(),
-        });
-
-        if (!response.ok) {
-          throw new Error("Invalid email or password");
-        }
-
-        const data = await response.json();
-
-        // The real backend issues both an access token AND a refresh
-        // token (per its README). Storing both — the access token for
-        // normal requests, the refresh token for getting a new access
-        // token once this one expires (not yet wired anywhere, but the
-        // value needs to be saved now or it's lost).
-        if (data.access_token) {
-          localStorage.setItem("token", data.access_token);
-        }
-        if (data.refresh_token) {
-          localStorage.setItem("refresh_token", data.refresh_token);
-        }
-
-        // First-time users (no company yet) go to onboarding; returning
-        // users with a company already set up skip straight to the
-        // dashboard. Also fixes a separate gap: company_id used to only
-        // get set during onboarding itself, so a returning user on a
-        // fresh browser session had none at all until now.
-        try {
-          const companies = await getMyCompanies();
-          if (companies.length > 0) {
-            localStorage.setItem("company_id", companies[0].id);
-            router.push("/dashboard");
-          } else {
-            router.push("/onboarding/company");
-          }
-        } catch (err) {
-          console.warn("Could not check existing companies, defaulting to onboarding:", err);
-          router.push("/onboarding/company");
-        }
-      } else {
-        // FIX: the real endpoint is /api/users/create, not
-        // /api/users/register — this was silently broken before.
-        // Also requires account_name — confirmed against the real
-        // backend/schemas/userschema.py UserCreate schema.
-        const response = await fetch(`${baseUrl}/api/users/create`, {
+      if (mode === "signup") {
+        // 1. Create the user account
+        const registerRes = await fetch(`${baseUrl}/api/users/create`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -95,11 +44,50 @@ export default function LoginPage() {
           }),
         });
 
-        if (!response.ok) {
-          throw new Error("Registration failed. Email might already be taken.");
+        if (!registerRes.ok) {
+          const errorData = await registerRes.json().catch(() => ({}));
+          throw new Error(errorData.detail || "Registration failed. Email might already be taken.");
         }
+      }
 
-        setMode("signin");
+      // 2. Perform Login (Runs directly for "signin", or auto-runs immediately after "signup")
+      const formData = new URLSearchParams();
+      formData.append("username", username);
+      formData.append("password", password);
+
+      const tokenRes = await fetch(`${baseUrl}/api/users/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData.toString(),
+      });
+
+      if (!tokenRes.ok) {
+        throw new Error("Invalid email or password");
+      }
+
+      const data = await tokenRes.json();
+
+      if (data.access_token) {
+        localStorage.setItem("token", data.access_token);
+      }
+      if (data.refresh_token) {
+        localStorage.setItem("refresh_token", data.refresh_token);
+      }
+
+      // 3. Route to Onboarding (if fresh account) or Dashboard (if existing company found)
+      try {
+        const companies = await getMyCompanies();
+        if (companies && companies.length > 0) {
+          localStorage.setItem("company_id", companies[0].id);
+          router.push("/dashboard");
+        } else {
+          router.push("/onboarding/company");
+        }
+      } catch (err) {
+        console.warn("Could not check existing companies, defaulting to onboarding:", err);
+        router.push("/onboarding/company");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred");
@@ -251,6 +239,7 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
@@ -264,6 +253,9 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+              {mode === "signup" && (
+                <p className="mt-1 text-xs text-[#9aa2ab]">Must be at least 8 characters.</p>
+              )}
             </div>
 
             {mode === "signin" && (

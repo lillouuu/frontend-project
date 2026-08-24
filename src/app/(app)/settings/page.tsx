@@ -1,7 +1,42 @@
 "use client";
 
-import { useState } from "react";
-import { User, Building2, Bell, Users, CreditCard, Sparkles, ChevronRight, Plus, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Building2, Bell, Users, CreditCard, Sparkles, ChevronRight, Plus, X, Loader2, Check } from "lucide-react";
+import { getCurrentUser, updateCurrentUser, changePassword, updateAccountName, getMySubscription } from "@/lib/api/account";
+import { getMyCompanies, updateCompany } from "@/lib/api/company";
+import { createExecutive, getExecutive, updateExecutive } from "@/lib/api/executive";
+import type { CurrentUser, Subscription } from "@/types/currentUser";
+import type { Company } from "@/types/company";
+import type { Executive } from "@/types/executive";
+
+// ---------------------------------------------------------------------------
+// Honest map of what's real vs. cosmetic on this page, confirmed against
+// the actual backend schemas (not guessed):
+//
+// REAL, saves to the database:
+//   - Account tab: full_name, email (PATCH /api/users/me), password
+//     (PATCH /api/users/me/password)
+//   - Company Profile tab: name + LinkedIn URL only (PATCH /api/companies/{id})
+//   - Manager Profile tab: full_name, job_title, linkedin_url only
+//     (PATCH /api/executives/{id})
+//   - Subscription tab: current plan is real (GET /api/accounts/me/subscription)
+//
+// NOT SUPPORTED ANYWHERE IN THE BACKEND — no endpoint exists at all:
+//   - Company slogan/description/services/CTA (backend model doesn't have
+//     these fields — same gap as onboarding)
+//   - Manager bio (same reason)
+//   - AI Brand Voice tab (tone/sector/audience) — no persistence endpoint
+//     found in any schema we've seen
+//   - Notifications tab — no preferences endpoint exists
+//   - Team tab — no self-service team/invite endpoint exists (only an
+//     ADMIN-only account listing, not what a normal user needs here)
+//   - Subscription upgrade/cancel buttons — changing tier is ADMIN-only
+//     server-side (PATCH /api/admin/accounts/{id}/subscription), a normal
+//     user has no self-service way to change their own plan
+//
+// The unsupported sections are visibly marked in the UI (not silently
+// broken) so nobody mistakes "looks like a form" for "actually saves".
+// ---------------------------------------------------------------------------
 
 const tabs = [
   { id: "account", label: "Account", icon: User },
@@ -27,18 +62,133 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
   );
 }
 
+function NotConnectedBadge() {
+  return (
+    <span className="ml-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+      Not saved anywhere — lost on refresh
+    </span>
+  );
+}
+
+function LocalOnlyBadge() {
+  return (
+    <span className="ml-2 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-600">
+      Saved locally for your next audit — not in the database
+    </span>
+  );
+}
+
+function SavedToast({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <span className="ml-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+      <Check className="h-3.5 w-3.5" /> Saved
+    </span>
+  );
+}
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("account");
-  const [notifs, setNotifs] = useState({ weekly: true, competitors: true, calendar: false });
-  const [managerAdded, setManagerAdded] = useState(true);
 
-  // Company State
-  const [services, setServices] = useState<string[]>(["Data Quality", "ETL", "Cloud Governance"]);
+  // --- Real data loaded from the backend ---
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [executive, setExecutive] = useState<Executive | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getCurrentUser().then(setUser).catch((err) => console.warn("Could not load user:", err));
+    getMySubscription().then(setSubscription).catch((err) => console.warn("Could not load subscription:", err));
+
+    const companyId = typeof window !== "undefined" ? localStorage.getItem("company_id") : null;
+    if (companyId) {
+      getMyCompanies()
+        .then((companies) => setCompany(companies.find((c) => c.id === companyId) ?? companies[0] ?? null))
+        .catch((err) => console.warn("Could not load company:", err))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+
+    const executiveId = typeof window !== "undefined" ? localStorage.getItem("executive_id") : null;
+    if (executiveId) {
+      getExecutive(executiveId).then(setExecutive).catch((err) => console.warn("Could not load executive:", err));
+    }
+  }, []);
+
+  // --- Account tab form state ---
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountSaved, setAccountSaved] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      setFullName(user.full_name);
+      setEmail(user.email);
+    }
+  }, [user]);
+
+  const saveAccount = async () => {
+    setAccountSaving(true);
+    setAccountError(null);
+    setAccountSaved(false);
+    try {
+      await updateCurrentUser({ full_name: fullName, email });
+      if (currentPassword && newPassword) {
+        await changePassword({ current_password: currentPassword, new_password: newPassword });
+        setCurrentPassword("");
+        setNewPassword("");
+      }
+      setAccountSaved(true);
+      setTimeout(() => setAccountSaved(false), 2000);
+    } catch (err) {
+      setAccountError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  // --- Company tab form state ---
+  const [companyName, setCompanyName] = useState("");
+  const [companyLinkedinUrl, setCompanyLinkedinUrl] = useState("");
+  const [slogan, setSlogan] = useState("");
+  const [description, setDescription] = useState("");
+  const [services, setServices] = useState<string[]>([]);
   const [serviceInput, setServiceInput] = useState("");
   const [hasCta, setHasCta] = useState(true);
+  const [ctaType, setCtaType] = useState("");
+  const [ctaUrl, setCtaUrl] = useState("");
+  const [companySaving, setCompanySaving] = useState(false);
+  const [companySaved, setCompanySaved] = useState(false);
+  const [companyError, setCompanyError] = useState<string | null>(null);
 
-  // AI Brand Voice State
-  const [aiTone, setAiTone] = useState("professionnel");
+  useEffect(() => {
+    if (company) {
+      setCompanyName(company.name);
+      setCompanyLinkedinUrl(company.linkedin_url || "");
+    }
+    // Load the rest (slogan, description, services, CTA) from what
+    // onboarding saved locally — this is the only place they live.
+    const stored = typeof window !== "undefined" ? localStorage.getItem("onboarding_entreprise") : null;
+    if (stored) {
+      try {
+        const entreprise = JSON.parse(stored);
+        setSlogan(entreprise.slogan || "");
+        setDescription(entreprise.description || "");
+        setServices(entreprise.services || []);
+        setHasCta(entreprise.cta?.present ?? true);
+        setCtaType(entreprise.cta?.type || "");
+        setCtaUrl(entreprise.cta?.url || "");
+      } catch (err) {
+        console.warn("Could not parse stored entreprise data:", err);
+      }
+    }
+  }, [company]);
 
   const addService = () => {
     if (serviceInput.trim()) {
@@ -46,6 +196,167 @@ export default function SettingsPage() {
       setServiceInput("");
     }
   };
+
+  // Rebuilds the combined linkedin_data blob (entreprise + dirigeant) that
+  // useAudit reads, so edits here actually affect the next audit — even
+  // though none of this reaches the database.
+  const syncLinkedinData = (entreprise: Record<string, unknown>) => {
+    const dirigeantRaw = localStorage.getItem("onboarding_dirigeant");
+    const dirigeant = dirigeantRaw ? JSON.parse(dirigeantRaw) : { present: false };
+    localStorage.setItem("onboarding_entreprise", JSON.stringify(entreprise));
+    localStorage.setItem(
+      "linkedin_data",
+      JSON.stringify({ metadata: { version_schema: "1.0" }, entreprise, dirigeant })
+    );
+  };
+
+  const saveCompany = async () => {
+    if (!company) return;
+    setCompanySaving(true);
+    setCompanyError(null);
+    setCompanySaved(false);
+    try {
+      // Only name + linkedin_url actually persist to the database —
+      // slogan, description, services, CTA have nowhere to go server-side,
+      // but ARE saved locally so the next audit actually uses them.
+      const updated = await updateCompany(company.id, {
+        name: companyName,
+        linkedin_url: companyLinkedinUrl || null,
+      });
+      setCompany(updated);
+
+      syncLinkedinData({
+        nom: companyName,
+        url_linkedin: companyLinkedinUrl || null,
+        slogan,
+        description,
+        services,
+        cta: hasCta
+          ? { present: true, type: ctaType || null, url: ctaUrl || null }
+          : { present: false, type: null, url: null },
+        // logo/banniere/coordonnees aren't editable here — preserved from
+        // whatever onboarding originally saved, if anything did.
+        logo: JSON.parse(localStorage.getItem("onboarding_entreprise") || "{}").logo ?? { present: false, url: null },
+        banniere: JSON.parse(localStorage.getItem("onboarding_entreprise") || "{}").banniere ?? { present: false, url: null },
+        coordonnees: JSON.parse(localStorage.getItem("onboarding_entreprise") || "{}").coordonnees ?? {},
+        secteur: null,
+        taille: null,
+        specialites: [],
+        nombre_abonnes: null,
+        publications: [],
+      });
+
+      setCompanySaved(true);
+      setTimeout(() => setCompanySaved(false), 2000);
+    } catch (err) {
+      setCompanyError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setCompanySaving(false);
+    }
+  };
+
+  // --- Manager tab form state ---
+  const [managerAdded, setManagerAdded] = useState(true);
+  const [managerName, setManagerName] = useState("");
+  const [managerTitle, setManagerTitle] = useState("");
+  const [managerBio, setManagerBio] = useState("");
+  const [managerLinkedinUrl, setManagerLinkedinUrl] = useState("");
+  const [managerSaving, setManagerSaving] = useState(false);
+  const [managerSaved, setManagerSaved] = useState(false);
+  const [managerError, setManagerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (executive) {
+      setManagerName(executive.full_name);
+      setManagerTitle(executive.job_title || "");
+      setManagerLinkedinUrl(executive.linkedin_url || "");
+    }
+    const stored = typeof window !== "undefined" ? localStorage.getItem("onboarding_dirigeant") : null;
+    if (stored) {
+      try {
+        const dirigeant = JSON.parse(stored);
+        setManagerAdded(dirigeant.present ?? true);
+        setManagerBio(dirigeant.resume || "");
+      } catch (err) {
+        console.warn("Could not parse stored dirigeant data:", err);
+      }
+    }
+  }, [executive]);
+
+  const saveManager = async () => {
+    // FIX: no longer requires an existing executive record — creates one
+    // if this is the first time, using the same company_id onboarding
+    // would have used. Needs a company to attach to, though.
+    if (!company) {
+      setManagerError("No company found — complete Company Profile first, or finish onboarding.");
+      return;
+    }
+    if (!managerName.trim()) {
+      setManagerError("Manager name is required.");
+      return;
+    }
+    setManagerSaving(true);
+    setManagerError(null);
+    setManagerSaved(false);
+    try {
+      // Only full_name, job_title, linkedin_url persist to the database —
+      // bio has nowhere to go server-side, but IS saved locally so the
+      // next audit actually reflects it.
+      const payload = {
+        full_name: managerName,
+        job_title: managerTitle || null,
+        linkedin_url: managerLinkedinUrl || null,
+      };
+
+      let updated: Executive;
+      if (executive) {
+        updated = await updateExecutive(executive.id, payload);
+      } else {
+        updated = await createExecutive({ company_id: company.id, ...payload });
+        localStorage.setItem("executive_id", updated.id);
+      }
+      setExecutive(updated);
+
+      const existingDirigeant = JSON.parse(localStorage.getItem("onboarding_dirigeant") || "{}");
+      const dirigeant = {
+        ...existingDirigeant,
+        present: managerAdded,
+        nom_complet: managerName,
+        titre: managerTitle || null,
+        resume: managerBio || null,
+        url_linkedin: managerLinkedinUrl || null,
+      };
+      localStorage.setItem("onboarding_dirigeant", JSON.stringify(dirigeant));
+
+      const entrepriseRaw = localStorage.getItem("onboarding_entreprise");
+      const entreprise = entrepriseRaw ? JSON.parse(entrepriseRaw) : null;
+      localStorage.setItem(
+        "linkedin_data",
+        JSON.stringify({ metadata: { version_schema: "1.0" }, entreprise, dirigeant })
+      );
+
+      setManagerSaved(true);
+      setTimeout(() => setManagerSaved(false), 2000);
+    } catch (err) {
+      setManagerError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setManagerSaving(false);
+    }
+  };
+
+  // --- Fully cosmetic tabs (no backend at all) ---
+  const [notifs, setNotifs] = useState({ weekly: true, competitors: true, calendar: false });
+  const [aiTone, setAiTone] = useState("professionnel");
+  const [aiSector, setAiSector] = useState("");
+  const [aiAudience, setAiAudience] = useState("");
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white px-8 py-6 font-sans">
@@ -82,7 +393,7 @@ export default function SettingsPage() {
 
         {/* Settings Content */}
         <div className="col-span-3 flex flex-col gap-5">
-          {/* ACCOUNT TAB */}
+          {/* ACCOUNT TAB — fully real */}
           {activeTab === "account" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
               <h2 className="mb-1 text-base font-bold text-slate-900">Account Security</h2>
@@ -90,47 +401,103 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Full name</label>
-                  <input defaultValue="Ruben Septimus" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                  <input
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                  />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Professional email</label>
-                  <input defaultValue="ruben@3lmsolutions.com" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                  <input
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                  />
                 </div>
-                <div className="col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Password</label>
-                  <input type="password" defaultValue="••••••••••••" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Current password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Only needed if changing password"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">New password</label>
+                  <input
+                    type="password"
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Leave blank to keep current password"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                  />
                 </div>
               </div>
-              <button className="mt-5 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50]">
-                Save changes
-              </button>
+              {accountError && <p className="mt-3 text-xs font-semibold text-rose-600">{accountError}</p>}
+              <div className="mt-5 flex items-center">
+                <button
+                  onClick={saveAccount}
+                  disabled={accountSaving}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50] disabled:opacity-50"
+                >
+                  {accountSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Save changes
+                </button>
+                <SavedToast show={accountSaved} />
+              </div>
             </div>
           )}
 
-          {/* COMPANY PROFILE TAB */}
+          {/* COMPANY PROFILE TAB — name/URL real, rest cosmetic */}
           {activeTab === "company" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
               <h2 className="mb-1 text-base font-bold text-slate-900">Company Page Details</h2>
               <p className="mb-5 text-xs text-slate-400">Manage data used for your LinkedIn Company Page audit</p>
+              {!company && (
+                <p className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  No company found for this account yet — complete onboarding first.
+                </p>
+              )}
               <div className="flex flex-col gap-4">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Company Name</label>
-                  <input defaultValue="3LM Solutions" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Slogan</label>
-                  <input defaultValue="Data integration at the service of your growth" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Description</label>
-                  <textarea rows={3} defaultValue="3LM Solutions accompanies companies in data integration and governance." className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                  <input
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    disabled={!company}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8] disabled:bg-slate-50"
+                  />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">LinkedIn URL</label>
-                  <input defaultValue="https://linkedin.com/company/3lm-solutions" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                  <input
+                    value={companyLinkedinUrl}
+                    onChange={(e) => setCompanyLinkedinUrl(e.target.value)}
+                    disabled={!company}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8] disabled:bg-slate-50"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 flex items-center text-sm font-medium text-slate-700">
+                    Slogan <LocalOnlyBadge />
+                  </label>
+                  <input value={slogan} onChange={(e) => setSlogan(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">Services Offered</label>
+                  <label className="mb-1.5 flex items-center text-sm font-medium text-slate-700">
+                    Description <LocalOnlyBadge />
+                  </label>
+                  <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                </div>
+                <div>
+                  <label className="mb-1.5 flex items-center text-sm font-medium text-slate-700">
+                    Services Offered <LocalOnlyBadge />
+                  </label>
                   <div className="mb-2 flex flex-wrap gap-2">
                     {services.map((s, i) => (
                       <span key={i} className="flex items-center gap-1 rounded-full bg-[#eef4fa] px-3 py-1 text-xs font-semibold text-[#4a7aa8]">
@@ -157,7 +524,9 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <span className="text-sm font-medium text-slate-700">Has Active Call to Action (CTA)?</span>
+                  <span className="flex items-center text-sm font-medium text-slate-700">
+                    Has Active Call to Action (CTA)? <LocalOnlyBadge />
+                  </span>
                   <Toggle on={hasCta} onChange={() => setHasCta(!hasCta)} />
                 </div>
 
@@ -165,27 +534,51 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-slate-700">CTA Label</label>
-                      <input defaultValue="Visit website" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                      <input
+                        value={ctaType}
+                        onChange={(e) => setCtaType(e.target.value)}
+                        placeholder="e.g. Visit website"
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                      />
                     </div>
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-slate-700">CTA Target URL</label>
-                      <input defaultValue="https://3lmsolutions.com" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                      <input
+                        value={ctaUrl}
+                        onChange={(e) => setCtaUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                      />
                     </div>
                   </div>
                 )}
               </div>
-              <button className="mt-5 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50]">
-                Save changes
-              </button>
+              {companyError && <p className="mt-3 text-xs font-semibold text-rose-600">{companyError}</p>}
+              <div className="mt-5 flex items-center">
+                <button
+                  onClick={saveCompany}
+                  disabled={companySaving || !company}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50] disabled:opacity-50"
+                >
+                  {companySaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Save changes
+                </button>
+                <SavedToast show={companySaved} />
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">
+                Only Company Name and LinkedIn URL are saved to the database — slogan, description,
+                services and CTA are saved locally and will be used in your next audit, but aren't
+                stored server-side (no backend field exists for them yet).
+              </p>
             </div>
           )}
 
-          {/* MANAGER PROFILE TAB */}
+          {/* MANAGER PROFILE TAB — name/title/URL real, bio cosmetic */}
           {activeTab === "manager" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
               <h2 className="mb-1 text-base font-bold text-slate-900">Manager (Dirigeant) Profile</h2>
               <p className="mb-5 text-xs text-slate-400">Accountable for 30% of your total LinkedIn score evaluation</p>
-              
+
               <div className="mb-6 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
                 <div>
                   <div className="text-sm font-medium text-slate-700">Include Manager in Audit Score</div>
@@ -194,40 +587,83 @@ export default function SettingsPage() {
                 <Toggle on={managerAdded} onChange={() => setManagerAdded(!managerAdded)} />
               </div>
 
+              {!executive && !company && (
+                <p className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  No company found yet — complete the Company Profile tab first, then you can add a manager here.
+                </p>
+              )}
+              {!executive && company && (
+                <p className="mb-4 text-xs text-sky-700 bg-sky-50 border border-sky-200 rounded-lg p-3">
+                  No manager profile yet — fill this in and save to create one.
+                </p>
+              )}
+
               {managerAdded && (
                 <div className="flex flex-col gap-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-slate-700">Manager Name</label>
-                      <input defaultValue="Alexandre Chen" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                      <input
+                        value={managerName}
+                        onChange={(e) => setManagerName(e.target.value)}
+                        placeholder="e.g. Jane Doe"
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                      />
                     </div>
                     <div>
                       <label className="mb-1.5 block text-sm font-medium text-slate-700">Job Title / Headline</label>
-                      <input defaultValue="CEO & Founder at 3LM Solutions | Keynote speaker" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                      <input
+                        value={managerTitle}
+                        onChange={(e) => setManagerTitle(e.target.value)}
+                        placeholder="e.g. CEO & Founder"
+                        className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                      />
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1.5 block text-sm font-medium text-slate-700">Manager Summary / Bio</label>
-                    <textarea rows={3} defaultValue="Serial entrepreneur in data governance with 15+ years of strategic leadership." className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                    <label className="mb-1.5 flex items-center text-sm font-medium text-slate-700">
+                      Manager Summary / Bio <LocalOnlyBadge />
+                    </label>
+                    <textarea rows={3} value={managerBio} onChange={(e) => setManagerBio(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-slate-700">LinkedIn Profile URL</label>
-                    <input defaultValue="https://linkedin.com/in/alexandre-chen" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                    <input
+                      value={managerLinkedinUrl}
+                      onChange={(e) => setManagerLinkedinUrl(e.target.value)}
+                      placeholder="linkedin.com/in/..."
+                      className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                    />
                   </div>
                 </div>
               )}
-              <button className="mt-5 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50]">
-                Save changes
-              </button>
+              {managerError && <p className="mt-3 text-xs font-semibold text-rose-600">{managerError}</p>}
+              <div className="mt-5 flex items-center">
+                <button
+                  onClick={saveManager}
+                  disabled={managerSaving || !company}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50] disabled:opacity-50"
+                >
+                  {managerSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {executive ? "Save changes" : "Create manager profile"}
+                </button>
+                <SavedToast show={managerSaved} />
+              </div>
             </div>
           )}
 
-          {/* AI BRAND VOICE TAB */}
+          {/* AI BRAND VOICE TAB — fully cosmetic, no backend endpoint exists */}
           {activeTab === "ai_voice" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <h2 className="mb-1 text-base font-bold text-slate-900">AI Brand Voice & Context</h2>
-              <p className="mb-5 text-xs text-slate-400">Controls how the AI rewrites copy and generates post content</p>
-              
+              <div className="mb-1 flex items-center">
+                <h2 className="text-base font-bold text-slate-900">AI Brand Voice & Context</h2>
+                <NotConnectedBadge />
+              </div>
+              <p className="mb-5 text-xs text-slate-400">
+                Controls how the AI rewrites copy and generates post content. No backend endpoint exists to
+                persist these yet — changes here are lost on refresh.
+              </p>
+
               <div className="flex flex-col gap-4">
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Desired Tone (ton_souhaite)</label>
@@ -244,25 +680,24 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Target Industry / Sector</label>
-                  <input defaultValue="Data Governance & IT Consulting" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                  <input value={aiSector} onChange={(e) => setAiSector(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">Target Audience (Cible Client)</label>
-                  <input defaultValue="CTOs, CIOs, Data Directors in Mid-Market & Enterprise (PME/ETI)" className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
+                  <input value={aiAudience} onChange={(e) => setAiAudience(e.target.value)} className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm outline-none focus:border-[#4a7aa8]" />
                 </div>
               </div>
-
-              <button className="mt-5 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50]">
-                Save changes
-              </button>
             </div>
           )}
 
-          {/* NOTIFICATIONS TAB */}
+          {/* NOTIFICATIONS TAB — fully cosmetic, no backend endpoint exists */}
           {activeTab === "notifications" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <h2 className="mb-1 text-base font-bold text-slate-900">Notifications</h2>
-              <p className="mb-5 text-xs text-slate-400">Choose what you want to be alerted about</p>
+              <div className="mb-1 flex items-center">
+                <h2 className="text-base font-bold text-slate-900">Notifications</h2>
+                <NotConnectedBadge />
+              </div>
+              <p className="mb-5 text-xs text-slate-400">No preferences endpoint exists in the backend yet — these toggles don't persist.</p>
               <div className="flex flex-col divide-y divide-slate-100">
                 {[
                   { key: "weekly", label: "Weekly performance summary", hint: "A recap of your score, engagement, and follower growth" },
@@ -284,86 +719,91 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* TEAM TAB */}
+          {/* TEAM TAB — fully cosmetic, no self-service team endpoint exists */}
           {activeTab === "team" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-              <h2 className="mb-1 text-base font-bold text-slate-900">Team Workspace</h2>
-              <p className="mb-5 text-xs text-slate-400">Manage people with access to this workspace</p>
+              <div className="mb-1 flex items-center">
+                <h2 className="text-base font-bold text-slate-900">Team Workspace</h2>
+                <NotConnectedBadge />
+              </div>
+              <p className="mb-5 text-xs text-slate-400">
+                No self-service team/invite endpoint exists in the backend yet. Showing your own account only.
+              </p>
               <div className="flex flex-col divide-y divide-slate-100">
-                {[
-                  { initials: "RS", name: "Ruben Septimus", email: "ruben@3lmsolutions.com", role: "Owner" },
-                  { initials: "LM", name: "Léa Martin", email: "lea@3lmsolutions.com", role: "Editor" },
-                ].map((member, i) => (
-                  <div key={i} className="flex items-center gap-3 py-4">
+                {user && (
+                  <div className="flex items-center gap-3 py-4">
                     <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#4a7aa8] text-xs font-bold text-white">
-                      {member.initials}
+                      {user.full_name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm font-semibold text-slate-800">{member.name}</div>
-                      <div className="text-xs text-slate-400">{member.email}</div>
+                      <div className="text-sm font-semibold text-slate-800">{user.full_name}</div>
+                      <div className="text-xs text-slate-400">{user.email}</div>
                     </div>
                     <span className="rounded-full bg-[#eef4fa] px-2.5 py-0.5 text-xs font-semibold text-[#2a6ba0]">
-                      {member.role}
+                      Owner
                     </span>
                   </div>
-                ))}
+                )}
               </div>
-              <button className="mt-4 rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50]">
-                + Invite team member
+              <button disabled className="mt-4 rounded-xl bg-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">
+                + Invite team member (not available)
               </button>
             </div>
           )}
 
-          {/* SUBSCRIPTION TAB */}
+          {/* SUBSCRIPTION TAB — current plan real, upgrade/cancel are admin-only server-side */}
           {activeTab === "subscription" && (
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
               <h2 className="mb-1 text-base font-bold text-slate-900">Subscription Plans</h2>
-              <p className="mb-5 text-xs text-slate-400">Manage your plan tiers and limits</p>
-              
+              <p className="mb-5 text-xs text-slate-400">
+                {subscription
+                  ? `Current plan: ${subscription.plan_tier} — ${subscription.status}`
+                  : "Loading your current plan..."}
+              </p>
+
               <div className="grid grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-slate-200 p-5">
-                  <div className="text-base font-bold text-slate-900">Découverte</div>
-                  <div className="text-xs text-slate-500">Free Trial</div>
-                  <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
-                    <div>✓ Limited Audit</div>
-                    <div>✓ Basic Optimizations</div>
-                    <div>✓ 5 AI Posts / Mo</div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border-2 border-[#4a7aa8] bg-[#f7fafd] p-5 shadow-sm">
-                  <span className="rounded-full bg-[#4a7aa8] px-2 py-0.5 text-[10px] font-bold uppercase text-white">Active Plan</span>
-                  <div className="mt-1 text-base font-bold text-slate-900">Offre Pro</div>
-                  <div className="text-xs text-slate-500">$49 / month</div>
-                  <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
-                    <div>✓ Unlimited Audits</div>
-                    <div>✓ Full AI Optimization</div>
-                    <div>✓ AI Assistant Chat</div>
-                    <div>✓ Editorial Calendar</div>
-                    <div>✓ Competitor Benchmark</div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 p-5">
-                  <div className="text-base font-bold text-slate-900">Offre Business</div>
-                  <div className="text-xs text-slate-500">$129 / month</div>
-                  <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
-                    <div>✓ Multi-Company & Managers</div>
-                    <div>✓ Team Collaboration</div>
-                    <div>✓ Automated Monitoring</div>
-                    <div>✓ Advanced PDF Reports</div>
-                  </div>
-                </div>
+                {[
+                  { tier: "DECOUVERTE", label: "Découverte", price: "Free Trial", features: ["Limited Audit", "Basic Optimizations", "5 AI Posts / Mo"] },
+                  { tier: "PRO", label: "Offre Pro", price: "$49 / month", features: ["Unlimited Audits", "Full AI Optimization", "AI Assistant Chat", "Editorial Calendar", "Competitor Benchmark"] },
+                  { tier: "BUSINESS", label: "Offre Business", price: "$129 / month", features: ["Multi-Company & Managers", "Team Collaboration", "Automated Monitoring", "Advanced PDF Reports"] },
+                ].map((plan) => {
+                  const isActive = subscription?.plan_tier === plan.tier;
+                  return (
+                    <div
+                      key={plan.tier}
+                      className={`rounded-2xl p-5 ${
+                        isActive ? "border-2 border-[#4a7aa8] bg-[#f7fafd] shadow-sm" : "border border-slate-200"
+                      }`}
+                    >
+                      {isActive && (
+                        <span className="rounded-full bg-[#4a7aa8] px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                          Active Plan
+                        </span>
+                      )}
+                      <div className="mt-1 text-base font-bold text-slate-900">{plan.label}</div>
+                      <div className="text-xs text-slate-500">{plan.price}</div>
+                      <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
+                        {plan.features.map((f) => (
+                          <div key={f}>✓ {f}</div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              <div className="mt-6 flex gap-3">
-                <button className="rounded-xl bg-[#0f1c33] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1a2f50]">
-                  Upgrade to Business
+              <div className="mt-6 flex items-center gap-3">
+                <button disabled className="rounded-xl bg-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">
+                  Upgrade plan (not available)
                 </button>
-                <button className="rounded-xl border border-rose-200 bg-white px-5 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50">
-                  Cancel subscription
+                <button disabled className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">
+                  Cancel subscription (not available)
                 </button>
               </div>
+              <p className="mt-2 text-[11px] text-slate-400">
+                Changing plans is admin-only on the backend right now — there's no self-service upgrade/cancel
+                endpoint a regular user can call.
+              </p>
             </div>
           )}
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -15,6 +16,7 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
+import { getCurrentUser, getMySubscription } from "@/lib/api/account";
 
 const mainNav = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -34,6 +36,36 @@ const secondaryNav = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [displayName, setDisplayName] = useState("Loading...");
+  const [planLabel, setPlanLabel] = useState("");
+  const [initials, setInitials] = useState("··");
+
+  useEffect(() => {
+    getCurrentUser()
+      .then((user) => {
+        setDisplayName(user.full_name);
+        setInitials(
+          user.full_name
+            .split(" ")
+            .map((w) => w[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase()
+        );
+      })
+      .catch((err) => {
+        console.warn("Could not load current user:", err);
+        setDisplayName("Unknown user");
+        setInitials("?");
+      });
+
+    getMySubscription()
+      .then((sub) => setPlanLabel(`${sub.plan_tier} Plan`))
+      .catch((err) => {
+        console.warn("Could not load subscription:", err);
+        setPlanLabel("");
+      });
+  }, []);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -138,11 +170,11 @@ export default function Sidebar() {
 
       <div className="mt-auto flex items-center gap-2.5 border-t border-white/10 pt-3.5">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#4a7aa8] text-[11px] font-semibold">
-          RS
+          {initials}
         </div>
         <div className="flex-1">
-          <div className="text-[12px] font-medium">Ruben Septimus</div>
-          <div className="text-[10px] text-white/50">Pro Plan</div>
+          <div className="text-[12px] font-medium">{displayName}</div>
+          <div className="text-[10px] text-white/50">{planLabel}</div>
         </div>
         <button
           onClick={handleLogout}

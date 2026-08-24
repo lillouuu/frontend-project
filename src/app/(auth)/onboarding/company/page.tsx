@@ -77,23 +77,21 @@ export default function OnboardingCompany() {
 
     let companyId: string;
     try {
-      // Backend only stores name + linkedin_url — the rest of the form
-      // data (slogan, description, services, etc.) lives in `entreprise`
-      // below, saved to localStorage for the audit's linkedin_data.
       const created = await createCompany({
         name: companyName,
         linkedin_url: linkedinUrl || null,
       });
       companyId = created.id;
     } catch (err) {
-      console.warn("Company creation failed, using local fallback ID:", err);
-      // Note: a 400 here can also mean "Company name already exists" —
-      // the backend checks uniqueness on `name` globally, not per-account.
-      // Worth surfacing that distinction to the user if it keeps happening.
+      console.warn("Company creation failed, using valid UUID fallback:", err);
       setSubmitError(
         "Couldn't save to the backend (unreachable, or this company name is already taken) — continuing locally so you can keep testing."
       );
-      companyId = localStorage.getItem("company_id") || `local-${Date.now()}`;
+      
+      // FIX: Ensure fallback is a valid UUID instead of "local-TIMESTAMP"
+      const existingId = localStorage.getItem("company_id");
+      const isValidUuid = existingId && !existingId.startsWith("local-");
+      companyId = isValidUuid ? existingId : crypto.randomUUID();
     }
 
     localStorage.setItem("company_id", companyId);

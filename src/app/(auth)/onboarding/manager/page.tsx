@@ -77,32 +77,36 @@ export default function OnboardingManager() {
       : { present: false };
 
     if (managerIncluded) {
-      const companyId = localStorage.getItem("company_id");
-      if (companyId) {
-        try {
-          // Backend only stores company_id, full_name, job_title,
-          // linkedin_url — bio and skills live in `dirigeant` below,
-          // saved to localStorage for the audit's linkedin_data.
-          await createExecutive({
-            company_id: companyId,
-            full_name: fullName,
-            job_title: jobTitle || null,
-            linkedin_url: linkedinUrl || null,
-          });
-        } catch (err) {
-          console.warn("Executive creation failed, continuing locally:", err);
-          setSubmitError(
-            "Couldn't reach the backend — continuing locally so you can keep testing."
-          );
-        }
+      const rawCompanyId = localStorage.getItem("company_id");
+
+      // Check if we have a valid UUID (not null, and not starting with local-)
+      const isValidUuid = rawCompanyId && !rawCompanyId.startsWith("local-");
+      const companyId = isValidUuid ? rawCompanyId : crypto.randomUUID();
+
+      // Ensure localStorage has a valid UUID for subsequent steps (like useAudit)
+      if (!isValidUuid) {
+        localStorage.setItem("company_id", companyId);
+      }
+
+      try {
+        const created = await createExecutive({
+          company_id: companyId,
+          full_name: fullName,
+          job_title: jobTitle || null,
+          linkedin_url: linkedinUrl || null,
+        });
+        localStorage.setItem("executive_id", created.id);
+      } catch (err) {
+        console.warn("Executive creation failed, continuing locally:", err);
+        setSubmitError(
+          "Couldn't reach the backend — continuing locally so you can keep testing."
+        );
       }
     }
 
     const entrepriseRaw = localStorage.getItem("onboarding_entreprise");
     const entreprise = entrepriseRaw ? JSON.parse(entrepriseRaw) : null;
 
-    // Full payload matching /api/ai/audits' expected linkedin_data shape
-    // (cahier de passation section 1.1).
     const linkedinData = {
       metadata: { version_schema: "1.0" },
       entreprise,
@@ -135,9 +139,9 @@ export default function OnboardingManager() {
             <span className="mb-2 inline-block rounded-full bg-[#eef4fa] px-3 py-1 text-xs font-semibold text-[#4a7aa8]">
               Step 3 of 4
             </span>
-            <h1 className="text-2xl font-bold text-slate-900">Manager's LinkedIn Profile</h1>
+            <h1 className="text-2xl font-bold text-slate-900"> Executive s LinkedIn Profile</h1>
             <p className="mt-1 text-sm text-slate-500">
-              The manager's profile accounts for 30% of your LinkedIn score.
+              The executive s profile accounts for 30% of your LinkedIn score.
             </p>
           </div>
 

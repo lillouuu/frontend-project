@@ -1,10 +1,35 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, AlertTriangle, Zap } from "lucide-react";
 
 export default function OnboardingSuccess() {
   const router = useRouter();
+  const [companyName, setCompanyName] = useState("your company");
+  const [managerCompleted, setManagerCompleted] = useState(false);
+
+  useEffect(() => {
+    const entrepriseRaw = localStorage.getItem("onboarding_entreprise");
+    if (entrepriseRaw) {
+      try {
+        const entreprise = JSON.parse(entrepriseRaw);
+        if (entreprise.nom) setCompanyName(entreprise.nom);
+      } catch (err) {
+        console.warn("Could not parse stored entreprise:", err);
+      }
+    }
+
+    const dirigeantRaw = localStorage.getItem("onboarding_dirigeant");
+    if (dirigeantRaw) {
+      try {
+        const dirigeant = JSON.parse(dirigeantRaw);
+        setManagerCompleted(dirigeant.present === true);
+      } catch (err) {
+        console.warn("Could not parse stored dirigeant:", err);
+      }
+    }
+  }, []);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-white p-6">
@@ -25,9 +50,9 @@ export default function OnboardingSuccess() {
             <CheckCircle2 className="h-8 w-8 text-emerald-500" />
           </div>
 
-          <h1 className="text-2xl font-bold text-slate-900">You're all set, 3LM Solutions</h1>
+          <h1 className="text-2xl font-bold text-slate-900">You are all set, {companyName}</h1>
           <p className="mt-2 text-sm text-slate-500">
-            We've got what we need to run your first LinkedIn audit.
+            We have got what we need to run your first LinkedIn audit.
           </p>
 
           <div className="mt-6 flex flex-col gap-3 text-left">
@@ -50,20 +75,30 @@ export default function OnboardingSuccess() {
               </div>
               <div className="flex-1">
                 <div className="text-sm font-semibold text-slate-800">Manager profile</div>
-                <div className="text-xs text-slate-400">Skipped — add anytime in Settings</div>
+                <div className="text-xs text-slate-400">
+                  {managerCompleted ? "Added during onboarding" : "Skipped — add anytime in Settings"}
+                </div>
               </div>
-              <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 border border-amber-200">
-                Skipped
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold border ${
+                  managerCompleted
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-amber-50 text-amber-700 border-amber-200"
+                }`}
+              >
+                {managerCompleted ? "Complete" : "Skipped"}
               </span>
             </div>
           </div>
 
-          <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50/60 p-4 text-left">
-            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-            <p className="text-xs text-amber-800">
-              Since the manager profile was skipped, your maximum possible score is capped at <strong>70%</strong>. Add it later to unlock the full score.
-            </p>
-          </div>
+          {!managerCompleted && (
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50/60 p-4 text-left">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <p className="text-xs text-amber-800">
+                Since the manager profile was skipped, your maximum possible score is capped at <strong>70%</strong>. Add it later to unlock the full score.
+              </p>
+            </div>
+          )}
 
           <div className="mt-6 flex flex-col gap-3">
             <button
@@ -74,7 +109,7 @@ export default function OnboardingSuccess() {
               Run my first audit
             </button>
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/dashboard")}
               className="w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50"
             >
               Go to dashboard

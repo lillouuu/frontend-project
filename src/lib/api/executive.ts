@@ -7,3 +7,17 @@ export function createExecutive(payload: ExecutiveCreateRequest): Promise<Execut
     body: JSON.stringify(payload),
   });
 }
+
+export function getExecutive(id: string): Promise<Executive> {
+  return apiFetch<Executive>(`/api/executives/${id}`);
+}
+
+export function updateExecutive(
+  id: string,
+  payload: Partial<Omit<ExecutiveCreateRequest, "company_id">>
+): Promise<Executive> {
+  return apiFetch<Executive>(`/api/executives/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
