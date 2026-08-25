@@ -11,6 +11,7 @@ import {
   XCircle,
   ArrowRight,
   Loader2,
+  Building2,
 } from "lucide-react";
 import { useAudit } from "@/hooks/useAudit";
 
@@ -18,7 +19,7 @@ type FilterType = "ALL" | "CRITIQUE" | "IMPORTANTE" | "OPTIMISATION";
 
 export default function AuditPage() {
   const [filter, setFilter] = useState<FilterType>("ALL");
-  const { auditData, recommendations, loading, error, isFallback, runAudit } = useAudit();
+  const { auditData, recommendations, loading, error, isFallback, needsProfile, runAudit } = useAudit();
 
   if (loading) {
     return (
@@ -26,6 +27,29 @@ export default function AuditPage() {
         <div className="flex flex-col items-center gap-3 text-slate-500">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span className="text-sm font-medium">Running audit...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsProfile) {
+    return (
+      <div className="flex flex-1 items-center justify-center h-full bg-slate-50">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <Building2 className="h-6 w-6 text-amber-500" />
+          <span className="text-sm font-semibold text-slate-800">
+            No company profile found yet
+          </span>
+          <p className="text-xs text-slate-500">
+            You need company info before an audit can run. Complete onboarding, or fill in your
+            details in Settings.
+          </p>
+          <Link
+            href="/settings"
+            className="rounded-lg bg-[#0077B5] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#005f93]"
+          >
+            Go to Settings
+          </Link>
         </div>
       </div>
     );
