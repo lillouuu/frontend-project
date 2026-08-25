@@ -1,6 +1,7 @@
 import { apiFetch } from "@/lib/apiClient";
 import type { AuditRequest, AuditResponse, AuditListResponse } from "@/types/audit";
 import type { Recommendation } from "@/types/recommendation";
+import type { OptimisationResponse } from "@/types/optimization";
 
 // Confirmed directly against the live Swagger UI (/docs, "ai" tag) — the
 // real routes have NO /ai/ prefix. A previous pass "fixed" this by adding
@@ -25,7 +26,9 @@ export function getAuditRecommendations(auditId: string): Promise<Recommendation
   return apiFetch<Recommendation[]>(`/api/audits/${auditId}/recommendations`);
 }
 
-// Also live on the backend (Swagger shows it) but not called from anywhere
-// in the app yet: GET /api/audits/{audit_id}/optimizations — returns the
-// optimizations already generated for a given audit. Might be useful later
-// for showing "past optimizations" on the audit or reports page.
+// Now used by useDashboard for the optimization-progress card — each
+// item's `decision` field (null/"accept"/"modify"/"reject") drives the
+// accepted/modified/rejected/pending counts.
+export function getAuditOptimizations(auditId: string): Promise<OptimisationResponse[]> {
+  return apiFetch<OptimisationResponse[]>(`/api/audits/${auditId}/optimizations`);
+}

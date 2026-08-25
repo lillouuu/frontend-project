@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, Globe, Plus, X, Loader2 } from "lucide-react";
 import { createCompany } from "@/lib/api/company";
+import { setCompanyData } from "@/lib/companyStorage";
 
 // ---------------------------------------------------------------------------
 // On submit, this now calls the real POST /api/companies/create endpoint
@@ -77,25 +78,27 @@ export default function OnboardingCompany() {
 
     let companyId: string;
     try {
+      // Backend only stores name + linkedin_url — the rest of the form
+      // data (slogan, description, services, etc.) lives in `entreprise`
+      // below, saved to localStorage for the audit's linkedin_data.
       const created = await createCompany({
         name: companyName,
         linkedin_url: linkedinUrl || null,
       });
       companyId = created.id;
     } catch (err) {
-      console.warn("Company creation failed, using valid UUID fallback:", err);
+      console.warn("Company creation failed, using local fallback ID:", err);
+      // Note: a 400 here can also mean "Company name already exists" —
+      // the backend checks uniqueness on `name` globally, not per-account.
+      // Worth surfacing that distinction to the user if it keeps happening.
       setSubmitError(
         "Couldn't save to the backend (unreachable, or this company name is already taken) — continuing locally so you can keep testing."
       );
-      
-      // FIX: Ensure fallback is a valid UUID instead of "local-TIMESTAMP"
-      const existingId = localStorage.getItem("company_id");
-      const isValidUuid = existingId && !existingId.startsWith("local-");
-      companyId = isValidUuid ? existingId : crypto.randomUUID();
+      companyId = localStorage.getItem("company_id") || `local-${Date.now()}`;
     }
 
     localStorage.setItem("company_id", companyId);
-    localStorage.setItem("onboarding_entreprise", JSON.stringify(entreprise));
+    setCompanyData("onboarding_entreprise", companyId, JSON.stringify(entreprise));
 
     router.push("/onboarding/manager");
   };

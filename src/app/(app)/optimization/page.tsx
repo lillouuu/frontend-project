@@ -35,16 +35,39 @@ export default function OptimizationPage() {
   const [actionText, setActionText] = useState<string | null>(null);
   const [raisonText, setRaisonText] = useState<string | null>(null);
 
-  // Champs obligatoires : contexte_entreprise
-  const [contexte, setContexte] = useState({
-    nom: "Nexalys Conseil",
-    secteur: "Conseil IT & Intégration ERP",
-    cible_client: "PME & Groupes Internationaux (Décideurs IT)",
-    services: "Intégration ERP, Analyse de besoins, Formation",
-    positionnement: "Expertise sur-mesure & accompagnement de proximité",
+  // FIX: this used to be hardcoded to the cahier's example company
+  // ("Nexalys Conseil") — meaning every real optimization would've silently
+  // submitted fake company data instead of the logged-in user's actual
+  // company. Now pulled from the same linkedin_data already used by
+  // useAudit/useDashboard. cible_client and positionnement have no real
+  // source in the onboarding data, so those stay empty (placeholder hint
+  // text only) rather than fake values.
+  const [contexte, setContexte] = useState(() => {
+    if (typeof window === "undefined") {
+      return { nom: "", secteur: "", cible_client: "", services: "", positionnement: "" };
+    }
+    try {
+      const stored = localStorage.getItem("linkedin_data");
+      const entreprise = stored ? JSON.parse(stored)?.entreprise : null;
+      return {
+        nom: entreprise?.nom ?? "",
+        secteur: entreprise?.secteur ?? "",
+        cible_client: "",
+        services: Array.isArray(entreprise?.services) ? entreprise.services.join(", ") : "",
+        positionnement: "",
+      };
+    } catch {
+      return { nom: "", secteur: "", cible_client: "", services: "", positionnement: "" };
+    }
   });
 
   const [cameFromAudit, setCameFromAudit] = useState(false);
+  // Distinguishes "never came from a recommendation" (expected, shows the
+  // normal hint) from "came from one, but it's missing critere_code" (a
+  // real backend data bug — recommendationschema.py types critere_code as
+  // required, non-null, so an empty value here means bad data upstream,
+  // not a navigation mistake).
+  const [missingCritereCode, setMissingCritereCode] = useState(false);
 
   useEffect(() => {
     const recId = searchParams.get("recommendation_id");
@@ -59,6 +82,21 @@ export default function OptimizationPage() {
       setRaisonText(raison);
       setContenuActuel(""); // no original content available from the audit — mode création
       setCameFromAudit(true);
+    } else if (recId) {
+      // FIX: OptimizationCreate (backend schema) never asks the frontend
+      // for critere_code at all — the backend looks it up itself from the
+      // Recommendation row via recommendation_id. So an empty critere_code
+      // shouldn't block anything; it just means we can't auto-select
+      // Type Élément, so the user picks one manually via the buttons above
+      // (which already default to a valid "slogan"). Root cause of the
+      // empty critere_code itself is a real backend matching bug in
+      // ai.py's create_audit — reported separately, not a frontend fix.
+      setRecommendationId(recId);
+      setActionText(action);
+      setRaisonText(raison);
+      setContenuActuel("");
+      setCameFromAudit(true);
+      setMissingCritereCode(true);
     }
   }, [searchParams]);
 
@@ -102,7 +140,7 @@ export default function OptimizationPage() {
         nom: contexte.nom,
         secteur: contexte.secteur,
         cible_client: contexte.cible_client,
-        services: contexte.services.split(",").map((s) => s.trim()),
+        services: contexte.services.split(",").map((s: string) => s.trim()),
         positionnement: contexte.positionnement,
         ton_souhaite: tonSouhaite,
       },
@@ -181,8 +219,8 @@ export default function OptimizationPage() {
                 {[
                   { id: "slogan", label: "Slogan" },
                   { id: "description_entreprise", label: "Description" },
-                  { id: "headline", label: "Titre Exécutif" },
-                  { id: "about", label: "À propos / Bio" },
+                  { id: "titre_dirigeant", label: "Titre Exécutif" },
+                  { id: "resume_dirigeant", label: "À propos / Bio" },
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -270,6 +308,7 @@ export default function OptimizationPage() {
                   type="text"
                   value={contexte.cible_client}
                   onChange={(e) => setContexte({ ...contexte, cible_client: e.target.value })}
+                  placeholder="e.g. PME & Groupes Internationaux"
                   className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
                 />
               </div>
@@ -290,6 +329,7 @@ export default function OptimizationPage() {
                   type="text"
                   value={contexte.positionnement}
                   onChange={(e) => setContexte({ ...contexte, positionnement: e.target.value })}
+                  placeholder="e.g. Expertise sur-mesure & accompagnement de proximité"
                   className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
                 />
               </div>
@@ -304,10 +344,17 @@ export default function OptimizationPage() {
               <Wand2 className="h-4 w-4" />
               {loading ? "Génération en cours..." : "Lancer l'Optimisation"}
             </button>
-            {!recommendationId && (
+            {!recommendationId && !missingCritereCode && (
               <p className="text-center text-[11px] text-slate-400">
                 Ouvrez cette page depuis une recommandation d'audit (bouton "Apply this fix")
                 pour lancer une optimisation réelle.
+              </p>
+            )}
+            {missingCritereCode && (
+              <p className="text-center text-[11px] text-amber-600">
+                Cette recommandation n&apos;a pas de critere_code (donnée manquante côté
+                backend — à signaler à l&apos;équipe). Sélectionnez le type d&apos;élément
+                manuellement ci-dessus pour continuer.
               </p>
             )}
           </div>

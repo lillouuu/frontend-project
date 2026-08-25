@@ -8,6 +8,7 @@ import { createExecutive, getExecutive, updateExecutive } from "@/lib/api/execut
 import type { CurrentUser, Subscription } from "@/types/currentUser";
 import type { Company } from "@/types/company";
 import type { Executive } from "@/types/executive";
+import { getCompanyData, setCompanyData } from "@/lib/companyStorage";
 
 // ---------------------------------------------------------------------------
 // Honest map of what's real vs. cosmetic on this page, confirmed against
@@ -174,7 +175,8 @@ export default function SettingsPage() {
     }
     // Load the rest (slogan, description, services, CTA) from what
     // onboarding saved locally — this is the only place they live.
-    const stored = typeof window !== "undefined" ? localStorage.getItem("onboarding_entreprise") : null;
+    const companyIdForLoad = company?.id || localStorage.getItem("company_id") || "";
+    const stored = getCompanyData("onboarding_entreprise", companyIdForLoad);
     if (stored) {
       try {
         const entreprise = JSON.parse(stored);
@@ -200,12 +202,13 @@ export default function SettingsPage() {
   // Rebuilds the combined linkedin_data blob (entreprise + dirigeant) that
   // useAudit reads, so edits here actually affect the next audit — even
   // though none of this reaches the database.
-  const syncLinkedinData = (entreprise: Record<string, unknown>) => {
-    const dirigeantRaw = localStorage.getItem("onboarding_dirigeant");
+  const syncLinkedinData = (companyId: string, entreprise: Record<string, unknown>) => {
+    const dirigeantRaw = getCompanyData("onboarding_dirigeant", companyId);
     const dirigeant = dirigeantRaw ? JSON.parse(dirigeantRaw) : { present: false };
-    localStorage.setItem("onboarding_entreprise", JSON.stringify(entreprise));
-    localStorage.setItem(
+    setCompanyData("onboarding_entreprise", companyId, JSON.stringify(entreprise));
+    setCompanyData(
       "linkedin_data",
+      companyId,
       JSON.stringify({ metadata: { version_schema: "1.0" }, entreprise, dirigeant })
     );
   };
@@ -225,7 +228,8 @@ export default function SettingsPage() {
       });
       setCompany(updated);
 
-      syncLinkedinData({
+      const existingEntreprise = JSON.parse(getCompanyData("onboarding_entreprise", company.id) || "{}");
+      syncLinkedinData(company.id, {
         nom: companyName,
         url_linkedin: companyLinkedinUrl || null,
         slogan,
@@ -236,9 +240,9 @@ export default function SettingsPage() {
           : { present: false, type: null, url: null },
         // logo/banniere/coordonnees aren't editable here — preserved from
         // whatever onboarding originally saved, if anything did.
-        logo: JSON.parse(localStorage.getItem("onboarding_entreprise") || "{}").logo ?? { present: false, url: null },
-        banniere: JSON.parse(localStorage.getItem("onboarding_entreprise") || "{}").banniere ?? { present: false, url: null },
-        coordonnees: JSON.parse(localStorage.getItem("onboarding_entreprise") || "{}").coordonnees ?? {},
+        logo: existingEntreprise.logo ?? { present: false, url: null },
+        banniere: existingEntreprise.banniere ?? { present: false, url: null },
+        coordonnees: existingEntreprise.coordonnees ?? {},
         secteur: null,
         taille: null,
         specialites: [],
@@ -271,7 +275,8 @@ export default function SettingsPage() {
       setManagerTitle(executive.job_title || "");
       setManagerLinkedinUrl(executive.linkedin_url || "");
     }
-    const stored = typeof window !== "undefined" ? localStorage.getItem("onboarding_dirigeant") : null;
+    const companyIdForLoad = localStorage.getItem("company_id") || "";
+    const stored = getCompanyData("onboarding_dirigeant", companyIdForLoad);
     if (stored) {
       try {
         const dirigeant = JSON.parse(stored);
@@ -317,7 +322,7 @@ export default function SettingsPage() {
       }
       setExecutive(updated);
 
-      const existingDirigeant = JSON.parse(localStorage.getItem("onboarding_dirigeant") || "{}");
+      const existingDirigeant = JSON.parse(getCompanyData("onboarding_dirigeant", company.id) || "{}");
       const dirigeant = {
         ...existingDirigeant,
         present: managerAdded,
@@ -326,12 +331,13 @@ export default function SettingsPage() {
         resume: managerBio || null,
         url_linkedin: managerLinkedinUrl || null,
       };
-      localStorage.setItem("onboarding_dirigeant", JSON.stringify(dirigeant));
+      setCompanyData("onboarding_dirigeant", company.id, JSON.stringify(dirigeant));
 
-      const entrepriseRaw = localStorage.getItem("onboarding_entreprise");
+      const entrepriseRaw = getCompanyData("onboarding_entreprise", company.id);
       const entreprise = entrepriseRaw ? JSON.parse(entrepriseRaw) : null;
-      localStorage.setItem(
+      setCompanyData(
         "linkedin_data",
+        company.id,
         JSON.stringify({ metadata: { version_schema: "1.0" }, entreprise, dirigeant })
       );
 

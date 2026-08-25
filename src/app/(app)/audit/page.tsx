@@ -19,7 +19,7 @@ type FilterType = "ALL" | "CRITIQUE" | "IMPORTANTE" | "OPTIMISATION";
 
 export default function AuditPage() {
   const [filter, setFilter] = useState<FilterType>("ALL");
-  const { auditData, recommendations, loading, error, isFallback, needsProfile, runAudit } = useAudit();
+  const { auditData, recommendations, loading, error, isFallback, needsProfile, runAudit, refresh } = useAudit();
 
   if (loading) {
     return (
@@ -64,7 +64,7 @@ export default function AuditPage() {
             Couldn't load audit data.
           </span>
           <button
-            onClick={runAudit}
+            onClick={refresh}
             className="rounded-lg bg-[#0077B5] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#005f93]"
           >
             Try again

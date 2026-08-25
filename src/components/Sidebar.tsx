@@ -92,12 +92,15 @@ export default function Sidebar() {
       }
     }
 
+    // FIX: only clear session-specific pointers now. The old code also
+    // cleared onboarding_entreprise/onboarding_dirigeant/linkedin_data —
+    // those are now namespaced per company_id (see lib/companyStorage.ts),
+    // so they should survive logout and be recovered automatically when
+    // the same account logs back in. Clearing them here defeated that.
     localStorage.removeItem("token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("company_id");
-    localStorage.removeItem("onboarding_entreprise");
-    localStorage.removeItem("onboarding_dirigeant");
-    localStorage.removeItem("linkedin_data");
+    localStorage.removeItem("executive_id");
     router.push("/login");
   };
 
