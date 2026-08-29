@@ -21,6 +21,36 @@ import {
 } from "lucide-react";
 import { useOptimization } from "@/hooks/useOptimization";
 
+// TEMPORARY FRONTEND WORKAROUND — not a real fix. The backend's critere_code
+// matching (ai.py create_audit) can only succeed if the AI module's raw
+// recommendation objects carry a critere_code/critere/categorie field (they
+// never do — confirmed against real audit output, which only has
+// priorite/action/raison) or if evaluations count exactly equals
+// recommendations count (also essentially never true). Net effect:
+// critere_code comes back empty for every recommendation from every audit.
+// This has been reported to the backend team. Until it's fixed there, this
+// guesses the likely type_element from the recommendation's own action/raison
+// text instead of defaulting blindly to "slogan" every time. It's a guess,
+// clearly labeled as one in the UI — remove this once critere_code works.
+function guessTypeElementFromText(action: string | null, raison: string | null): string | null {
+  const text = `${action ?? ""} ${raison ?? ""}`.toLowerCase();
+  const mentionsDirigeant = text.includes("dirigeant");
+
+  if (mentionsDirigeant && (text.includes("résumé") || text.includes("resume") || text.includes("bio"))) {
+    return "resume_dirigeant";
+  }
+  if (mentionsDirigeant && (text.includes("titre") || text.includes("poste") || text.includes("fonction"))) {
+    return "titre_dirigeant";
+  }
+  if (text.includes("slogan")) {
+    return "slogan";
+  }
+  if (text.includes("description")) {
+    return "description_entreprise";
+  }
+  return null; // no confident guess — let the existing default ("slogan") stand
+}
+
 export default function OptimizationPage() {
   const searchParams = useSearchParams();
 
@@ -36,7 +66,7 @@ export default function OptimizationPage() {
   const [raisonText, setRaisonText] = useState<string | null>(null);
 
   // FIX: this used to be hardcoded to the cahier's example company
-  // ("Nexalys Conseil") — meaning every real optimization would've silently
+  // ("Nexalys Conseil") — every real optimization would've silently
   // submitted fake company data instead of the logged-in user's actual
   // company. Now pulled from the same linkedin_data already used by
   // useAudit/useDashboard. cible_client and positionnement have no real
@@ -62,12 +92,11 @@ export default function OptimizationPage() {
   });
 
   const [cameFromAudit, setCameFromAudit] = useState(false);
-  // Distinguishes "never came from a recommendation" (expected, shows the
-  // normal hint) from "came from one, but it's missing critere_code" (a
-  // real backend data bug — recommendationschema.py types critere_code as
-  // required, non-null, so an empty value here means bad data upstream,
-  // not a navigation mistake).
-  const [missingCritereCode, setMissingCritereCode] = useState(false);
+  // True when we arrived from a real recommendation but had to guess
+  // type_element ourselves because critere_code came back empty (backend
+  // bug — see guessTypeElementFromText above). Shown in the UI so this
+  // never looks like a silent, confident auto-selection.
+  const [guessedTypeElement, setGuessedTypeElement] = useState(false);
 
   useEffect(() => {
     const recId = searchParams.get("recommendation_id");
@@ -75,28 +104,31 @@ export default function OptimizationPage() {
     const action = searchParams.get("action");
     const raison = searchParams.get("raison");
 
-    if (recId && critereCode) {
-      setRecommendationId(recId);
+    if (!recId) return;
+
+    // FIX: OptimizationCreate (backend schema) never asks the frontend for
+    // critere_code at all — the backend looks it up itself from the
+    // Recommendation row via recommendation_id. So an empty critere_code
+    // should never block submission; recommendation_id is the only thing
+    // that's actually required.
+    setRecommendationId(recId);
+    setActionText(action);
+    setRaisonText(raison);
+    setContenuActuel(""); // no original content available from the audit — mode création
+    setCameFromAudit(true);
+
+    if (critereCode) {
       setTypeElement(critereCode);
-      setActionText(action);
-      setRaisonText(raison);
-      setContenuActuel(""); // no original content available from the audit — mode création
-      setCameFromAudit(true);
-    } else if (recId) {
-      // FIX: OptimizationCreate (backend schema) never asks the frontend
-      // for critere_code at all — the backend looks it up itself from the
-      // Recommendation row via recommendation_id. So an empty critere_code
-      // shouldn't block anything; it just means we can't auto-select
-      // Type Élément, so the user picks one manually via the buttons above
-      // (which already default to a valid "slogan"). Root cause of the
-      // empty critere_code itself is a real backend matching bug in
-      // ai.py's create_audit — reported separately, not a frontend fix.
-      setRecommendationId(recId);
-      setActionText(action);
-      setRaisonText(raison);
-      setContenuActuel("");
-      setCameFromAudit(true);
-      setMissingCritereCode(true);
+      setGuessedTypeElement(false);
+    } else {
+      const guess = guessTypeElementFromText(action, raison);
+      if (guess) {
+        setTypeElement(guess);
+        setGuessedTypeElement(true);
+      }
+      // no confident guess — typeElement stays at its "slogan" default,
+      // and the UI below makes clear this wasn't matched, guessed, or
+      // confirmed, so the user knows to check it manually.
     }
   }, [searchParams]);
 
@@ -214,6 +246,11 @@ export default function OptimizationPage() {
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Type Élément <span className="text-red-500">*</span>
+                {guessedTypeElement && (
+                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+                    Estimé — vérifiez
+                  </span>
+                )}
               </label>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {[
@@ -308,7 +345,6 @@ export default function OptimizationPage() {
                   type="text"
                   value={contexte.cible_client}
                   onChange={(e) => setContexte({ ...contexte, cible_client: e.target.value })}
-                  placeholder="e.g. PME & Groupes Internationaux"
                   className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
                 />
               </div>
@@ -329,7 +365,6 @@ export default function OptimizationPage() {
                   type="text"
                   value={contexte.positionnement}
                   onChange={(e) => setContexte({ ...contexte, positionnement: e.target.value })}
-                  placeholder="e.g. Expertise sur-mesure & accompagnement de proximité"
                   className="mt-0.5 w-full rounded-lg border border-slate-200 p-2 text-xs text-slate-700 outline-none focus:border-[#4a7aa8]"
                 />
               </div>
@@ -344,17 +379,17 @@ export default function OptimizationPage() {
               <Wand2 className="h-4 w-4" />
               {loading ? "Génération en cours..." : "Lancer l'Optimisation"}
             </button>
-            {!recommendationId && !missingCritereCode && (
+            {!recommendationId && (
               <p className="text-center text-[11px] text-slate-400">
                 Ouvrez cette page depuis une recommandation d'audit (bouton "Apply this fix")
                 pour lancer une optimisation réelle.
               </p>
             )}
-            {missingCritereCode && (
+            {recommendationId && guessedTypeElement && (
               <p className="text-center text-[11px] text-amber-600">
-                Cette recommandation n&apos;a pas de critere_code (donnée manquante côté
-                backend — à signaler à l&apos;équipe). Sélectionnez le type d&apos;élément
-                manuellement ci-dessus pour continuer.
+                Type élément estimé à partir du texte de la recommandation (critere_code
+                manquant côté backend — signalé à l&apos;équipe). Vérifiez ci-dessus avant
+                de lancer.
               </p>
             )}
           </div>

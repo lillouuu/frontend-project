@@ -48,3 +48,34 @@ export async function apiFetch<T>(
 
   return response.json();
 }
+
+// For binary responses (PDFs) — same auth handling as apiFetch, but
+// returns a Blob instead of trying to parse JSON. Needed because plain
+// <a href> links can't send an Authorization header, so protected PDF
+// endpoints (like /api/reports/audit/{id}) 403 if you just link to them
+// directly — you have to fetch them properly and hand the browser the
+// resulting blob yourself.
+export async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try {
+      const body = await response.json();
+      message = body.detail || body.message || message;
+    } catch {
+      // response wasn't JSON (likely a real PDF error page) — keep default
+    }
+    throw new ApiError(message, response.status);
+  }
+
+  return response.blob();
+}

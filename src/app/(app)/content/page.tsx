@@ -23,6 +23,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useGeneration } from "@/hooks/useGeneration";
+import { getStoredCompanyContext } from "@/lib/companyContext";
 
 // Maps the UI's format buttons to the type_contenu values the API expects
 // (per cahier de passation section 2.3). "Product Launch" isn't in the
@@ -33,20 +34,6 @@ const FORMAT_TO_TYPE_CONTENU: Record<string, string> = {
   "Case Study": "etude_de_cas",
   "Carousel Blueprint": "carrousel",
   "Product Launch": "annonce",
-};
-
-// ---------------------------------------------------------------------------
-// contexte_entreprise (nom, secteur, services, positionnement) isn't
-// collected anywhere in the current onboarding forms yet — same gap as the
-// audit's company_id. Using the same placeholder company from the cahier de
-// passation's own generation test case so the demo stays consistent.
-// Replace with real company profile data once onboarding is wired.
-// ---------------------------------------------------------------------------
-const PLACEHOLDER_COMPANY = {
-  nom: "Nexalys Conseil",
-  secteur: "Conseil en technologies de l'information",
-  services: ["Intégration ERP", "Conseil en transformation digitale"],
-  positionnement: "Cabinet spécialisé dans les projets ERP critiques pour l'industrie",
 };
 
 export default function GenerationPage() {
@@ -60,7 +47,41 @@ export default function GenerationPage() {
     format: "Case Study",
     tone: "Professionnel & Expert",
     targetAudience: "PME et ETI industrielles",
+    // FIX: was hardcoded to "expertise" for every single generation,
+    // regardless of actual intent. Real values seen in the cahier de
+    // passation's own test cases: "prospects", "expertise", "visibilite",
+    // "recrutement".
+    objectif: "expertise",
+    messageCle: "",
+    // Free-form "clé: valeur" per line — parsed into elements_fournis below.
+    // Per the cahier: "plus on fournit d'éléments factuels réels, meilleur
+    // est le contenu et moins le LLM est tenté d'inventer." This was never
+    // collected at all before, so every generation had less real context
+    // than the backend can actually use.
+    elementsFournisText: "",
     includeCTA: true,
+  });
+
+  function parseElementsFournis(text: string): Record<string, string> | undefined {
+    const result: Record<string, string> = {};
+    text.split("\n").forEach((line) => {
+      const idx = line.indexOf(":");
+      if (idx > 0) {
+        const key = line.slice(0, idx).trim();
+        const value = line.slice(idx + 1).trim();
+        if (key) result[key] = value;
+      }
+    });
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  // FIX: this used to be a hardcoded fake company ("Nexalys Conseil") —
+  // every generation would've silently submitted fake data instead of the
+  // logged-in user's actual company. positionnement has no real source in
+  // onboarding data, so it stays user-editable with a placeholder hint.
+  const [companyContext, setCompanyContext] = useState(() => {
+    const stored = getStoredCompanyContext();
+    return { ...stored, positionnement: "" };
   });
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -77,14 +98,16 @@ export default function GenerationPage() {
       type_contenu: FORMAT_TO_TYPE_CONTENU[formData.format] ?? "publication",
       brief: {
         sujet: formData.topic,
-        objectif: "expertise",
+        objectif: formData.objectif,
+        message_cle: formData.messageCle || undefined,
+        elements_fournis: parseElementsFournis(formData.elementsFournisText),
       },
       contexte_entreprise: {
-        nom: PLACEHOLDER_COMPANY.nom,
-        secteur: PLACEHOLDER_COMPANY.secteur,
+        nom: companyContext.nom,
+        secteur: companyContext.secteur,
         cible_client: formData.targetAudience,
-        services: PLACEHOLDER_COMPANY.services,
-        positionnement: PLACEHOLDER_COMPANY.positionnement,
+        services: companyContext.services,
+        positionnement: companyContext.positionnement,
         ton_souhaite: formData.tone,
       },
     });
@@ -197,12 +220,72 @@ export default function GenerationPage() {
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Objectif
+                </label>
+                <select
+                  value={formData.objectif}
+                  onChange={(e) => setFormData({ ...formData, objectif: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-2.5 text-xs font-medium outline-none transition-all focus:border-[#4a7aa8]"
+                >
+                  <option value="visibilite">Visibilité</option>
+                  <option value="prospects">Prospects</option>
+                  <option value="recrutement">Recrutement</option>
+                  <option value="expertise">Expertise</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Message clé <span className="normal-case text-slate-400">(optionnel)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.messageCle}
+                  onChange={(e) => setFormData({ ...formData, messageCle: e.target.value })}
+                  placeholder="e.g. Sécuriser une migration ERP critique sans arrêter la production"
+                  className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs outline-none transition-all focus:border-[#4a7aa8] focus:ring-1 focus:ring-[#4a7aa8]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Éléments factuels <span className="normal-case text-slate-400">(optionnel, un par ligne : clé: valeur)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={formData.elementsFournisText}
+                  onChange={(e) => setFormData({ ...formData, elementsFournisText: e.target.value })}
+                  placeholder={"probleme: ERP obsolète, risque d'arrêt de production\nsolution: migration progressive par modules"}
+                  className="mt-1 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none transition-all focus:border-[#4a7aa8] focus:ring-1 focus:ring-[#4a7aa8]"
+                />
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Plus il y a de faits réels ici, moins l'IA a besoin d'inventer.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Cible / Audience
                 </label>
                 <input
                   type="text"
                   value={formData.targetAudience}
                   onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs outline-none transition-all focus:border-[#4a7aa8] focus:ring-1 focus:ring-[#4a7aa8]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Positionnement
+                </label>
+                <input
+                  type="text"
+                  value={companyContext.positionnement}
+                  onChange={(e) =>
+                    setCompanyContext({ ...companyContext, positionnement: e.target.value })
+                  }
+                  placeholder="e.g. Cabinet spécialisé dans les projets ERP critiques"
                   className="mt-1 w-full rounded-xl border border-slate-200 py-2.5 px-3 text-xs outline-none transition-all focus:border-[#4a7aa8] focus:ring-1 focus:ring-[#4a7aa8]"
                 />
               </div>
@@ -299,10 +382,12 @@ export default function GenerationPage() {
               <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
                 <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4a7aa8] font-bold text-white text-sm">
-                    NC
+                    {(companyContext.nom || "?").slice(0, 2).toUpperCase()}
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">{PLACEHOLDER_COMPANY.nom} • Expert ERP</h4>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      {companyContext.nom || "Votre entreprise"}
+                    </h4>
                     <p className="text-[11px] text-slate-400 flex items-center gap-1">
                       À l'instant • <Globe className="h-3 w-3" />
                     </p>
