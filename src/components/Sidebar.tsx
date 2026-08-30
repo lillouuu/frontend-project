@@ -18,6 +18,8 @@ import {
   Radar,
 } from "lucide-react";
 import { getCurrentUser, getMySubscription } from "@/lib/api/account";
+import { getMyCompanies } from "@/lib/api/company";
+import type { Company } from "@/types/company";
 
 const mainNav = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -41,6 +43,29 @@ export default function Sidebar() {
   const [displayName, setDisplayName] = useState("Loading...");
   const [planLabel, setPlanLabel] = useState("");
   const [initials, setInitials] = useState("··");
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<string>("");
+
+  useEffect(() => {
+    setActiveCompanyId(localStorage.getItem("company_id") || "");
+    getMyCompanies()
+      .then(setCompanies)
+      .catch((err) => console.warn("Could not load companies:", err));
+  }, []);
+
+  // FIX: previously there was nowhere in the entire app that showed which
+  // company was "active", or any way to change it other than re-running
+  // onboarding (which silently overwrites company_id with zero warning).
+  // This makes the active company always visible and explicitly switchable.
+  const handleSwitchCompany = (companyId: string) => {
+    localStorage.setItem("company_id", companyId);
+    // Full reload rather than router.push: every page's hooks read
+    // company_id fresh on their own mount, and several (useAudit,
+    // useDashboard, useBenchmark...) don't listen for storage changes —
+    // a reload is the simplest way to guarantee everything re-fetches for
+    // the newly selected company instead of showing stale data.
+    window.location.href = "/dashboard";
+  };
 
   useEffect(() => {
     getCurrentUser()
@@ -119,6 +144,25 @@ export default function Sidebar() {
           AI Advisor
         </div>
       </div>
+
+      {companies.length > 0 && (
+        <div className="mb-4">
+          <div className="mb-1 ml-1 text-[10px] font-semibold uppercase tracking-wide text-white/35">
+            Active company
+          </div>
+          <select
+            value={activeCompanyId}
+            onChange={(e) => handleSwitchCompany(e.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-white/[0.08] px-2.5 py-2 text-[13px] font-medium text-white outline-none [&>option]:bg-[#0f1c33]"
+          >
+            {companies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="mb-5 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[13px] text-white/45">
         <Search size={14} />
