@@ -4,6 +4,7 @@ import {
   getAuditRecommendations,
   getAuditOptimizations,
 } from "@/lib/api/audit";
+import { getCompanyData } from "@/lib/companyStorage";
 import { MOCK_DASHBOARD_DATA } from "@/lib/mockDashboardData";
 import type { DashboardResponse, PublicationMetrics } from "@/types/dashboard";
 
@@ -21,7 +22,11 @@ import type { DashboardResponse, PublicationMetrics } from "@/types/dashboard";
 //   - engagement / publication_frequency <- linkedin_data already in localStorage
 // So instead of one endpoint, this composes those four real sources.
 
-function computeEngagement(): { engagement: PublicationMetrics; publication_frequency: number } {
+// FIX: linkedin_data is namespaced per company_id via companyStorage.ts
+// (see onboarding/manager/page.tsx) — this used to read the old plain
+// global key directly, which nothing writes to anymore, so engagement
+// always silently computed as all zeros.
+function computeEngagement(companyId: string): { engagement: PublicationMetrics; publication_frequency: number } {
   const empty: PublicationMetrics = {
     total_publications: 0,
     total_reactions: 0,
@@ -30,7 +35,7 @@ function computeEngagement(): { engagement: PublicationMetrics; publication_freq
     avg_engagement: 0,
   };
 
-  const stored = typeof window !== "undefined" ? localStorage.getItem("linkedin_data") : null;
+  const stored = getCompanyData("linkedin_data", companyId);
   if (!stored) return { engagement: empty, publication_frequency: 0 };
 
   try {
@@ -119,7 +124,7 @@ export function useDashboard() {
         optimization_progression.modified +
         optimization_progression.rejected;
 
-      const { engagement, publication_frequency } = computeEngagement();
+      const { engagement, publication_frequency } = computeEngagement(companyId);
 
       setData({
         company_id: companyId,

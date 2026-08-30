@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, AlertTriangle, Zap } from "lucide-react";
+import { getCompanyData } from "@/lib/companyStorage";
 
 export default function OnboardingSuccess() {
   const router = useRouter();
@@ -10,7 +11,15 @@ export default function OnboardingSuccess() {
   const [managerCompleted, setManagerCompleted] = useState(false);
 
   useEffect(() => {
-    const entrepriseRaw = localStorage.getItem("onboarding_entreprise");
+    // FIX: these used to read the old plain global keys directly.
+    // companyStorage.ts's namespacing migration moved both to
+    // "onboarding_entreprise:{company_id}" / "onboarding_dirigeant:{company_id}"
+    // — nothing writes to the old keys anymore, so this always silently
+    // fell back to "your company" and managerCompleted=false.
+    const companyId = typeof window !== "undefined" ? localStorage.getItem("company_id") : null;
+    if (!companyId) return;
+
+    const entrepriseRaw = getCompanyData("onboarding_entreprise", companyId);
     if (entrepriseRaw) {
       try {
         const entreprise = JSON.parse(entrepriseRaw);
@@ -20,7 +29,7 @@ export default function OnboardingSuccess() {
       }
     }
 
-    const dirigeantRaw = localStorage.getItem("onboarding_dirigeant");
+    const dirigeantRaw = getCompanyData("onboarding_dirigeant", companyId);
     if (dirigeantRaw) {
       try {
         const dirigeant = JSON.parse(dirigeantRaw);

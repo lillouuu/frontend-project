@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useOptimization } from "@/hooks/useOptimization";
+import { getStoredCompanyContext } from "@/lib/companyContext";
 
 // TEMPORARY FRONTEND WORKAROUND — not a real fix. The backend's critere_code
 // matching (ai.py create_audit) can only succeed if the AI module's raw
@@ -66,29 +67,22 @@ export default function OptimizationPage() {
   const [raisonText, setRaisonText] = useState<string | null>(null);
 
   // FIX: this used to be hardcoded to the cahier's example company
-  // ("Nexalys Conseil") — every real optimization would've silently
-  // submitted fake company data instead of the logged-in user's actual
-  // company. Now pulled from the same linkedin_data already used by
-  // useAudit/useDashboard. cible_client and positionnement have no real
-  // source in the onboarding data, so those stay empty (placeholder hint
-  // text only) rather than fake values.
+  // ("Nexalys Conseil"), then later read linkedin_data via a raw global
+  // localStorage key that companyStorage.ts's namespacing migration made
+  // dead (nothing writes to that key anymore — see companyContext.ts).
+  // Reusing the shared, already-fixed helper instead of a third copy of
+  // this logic. cible_client and positionnement still have no real source
+  // in the onboarding data, so those stay empty (placeholder hint text
+  // only) rather than fake values.
   const [contexte, setContexte] = useState(() => {
-    if (typeof window === "undefined") {
-      return { nom: "", secteur: "", cible_client: "", services: "", positionnement: "" };
-    }
-    try {
-      const stored = localStorage.getItem("linkedin_data");
-      const entreprise = stored ? JSON.parse(stored)?.entreprise : null;
-      return {
-        nom: entreprise?.nom ?? "",
-        secteur: entreprise?.secteur ?? "",
-        cible_client: "",
-        services: Array.isArray(entreprise?.services) ? entreprise.services.join(", ") : "",
-        positionnement: "",
-      };
-    } catch {
-      return { nom: "", secteur: "", cible_client: "", services: "", positionnement: "" };
-    }
+    const stored = getStoredCompanyContext();
+    return {
+      nom: stored.nom,
+      secteur: stored.secteur,
+      cible_client: "",
+      services: stored.services.join(", "),
+      positionnement: "",
+    };
   });
 
   const [cameFromAudit, setCameFromAudit] = useState(false);

@@ -15,6 +15,7 @@ import {
   FileText,
   Settings,
   LogOut,
+  Radar,
 } from "lucide-react";
 import { getCurrentUser, getMySubscription } from "@/lib/api/account";
 
@@ -25,6 +26,7 @@ const mainNav = [
   { label: "Content", href: "/content", icon: PenLine },
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "Benchmark", href: "/benchmark", icon: BarChart3 },
+  { label: "Veille", href: "/veille", icon: Radar },
 ];
 
 const secondaryNav = [
