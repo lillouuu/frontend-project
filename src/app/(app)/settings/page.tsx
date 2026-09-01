@@ -769,9 +769,37 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { tier: "DECOUVERTE", label: "Découverte", price: "Free Trial", features: ["Limited Audit", "Basic Optimizations", "5 AI Posts / Mo"] },
-                  { tier: "PRO", label: "Offre Pro", price: "$49 / month", features: ["Unlimited Audits", "Full AI Optimization", "AI Assistant Chat", "Editorial Calendar", "Competitor Benchmark"] },
-                  { tier: "BUSINESS", label: "Offre Business", price: "$129 / month", features: ["Multi-Company & Managers", "Team Collaboration", "Automated Monitoring", "Advanced PDF Reports"] },
+                  {
+                    tier: "DECOUVERTE",
+                    label: "Découverte",
+                    features: [
+                      "Audit — 5 / month",
+                      "Optimization — 5 / month",
+                      "Content generation — 3 / month",
+                      "Strategy — 1 / month",
+                      "Dashboard",
+                    ],
+                  },
+                  {
+                    tier: "PRO",
+                    label: "Pro",
+                    features: [
+                      "Unlimited audits, optimizations, content & strategy",
+                      "AI Assistant chat",
+                      "Editorial calendar",
+                      "Competitor benchmark",
+                      "PDF reports & sharing",
+                    ],
+                  },
+                  {
+                    tier: "BUSINESS",
+                    label: "Business",
+                    features: [
+                      "Everything in Pro",
+                      "Multiple companies & executives",
+                      "Continuous monitoring (Veille)",
+                    ],
+                  },
                 ].map((plan) => {
                   const isActive = subscription?.plan_tier === plan.tier;
                   return (
@@ -787,7 +815,6 @@ export default function SettingsPage() {
                         </span>
                       )}
                       <div className="mt-1 text-base font-bold text-slate-900">{plan.label}</div>
-                      <div className="text-xs text-slate-500">{plan.price}</div>
                       <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600">
                         {plan.features.map((f) => (
                           <div key={f}>✓ {f}</div>

@@ -10,7 +10,6 @@ import {
   PenLine,
   Calendar,
   BarChart3,
-  Search,
   HelpCircle,
   FileText,
   Settings,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser, getMySubscription } from "@/lib/api/account";
 import { getMyCompanies } from "@/lib/api/company";
+import { ApiError } from "@/lib/apiClient";
 import type { Company } from "@/types/company";
 
 const mainNav = [
@@ -81,6 +81,19 @@ export default function Sidebar() {
         );
       })
       .catch((err) => {
+        // FIX: useRequireAuth only checks that a token STRING exists, not
+        // that it's still valid — an expired token used to pass that check,
+        // render the whole page, then every real call 401d and silently
+        // fell back to "Unknown user" / mock data instead of ever sending
+        // the person back to login. This call already happens on every
+        // protected page (Sidebar renders everywhere), so it doubles as
+        // the real validity check we don't otherwise have.
+        if (err instanceof ApiError && err.status === 401) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("refresh_token");
+          router.replace("/login");
+          return;
+        }
         console.warn("Could not load current user:", err);
         setDisplayName("Unknown user");
         setInitials("?");
@@ -163,11 +176,6 @@ export default function Sidebar() {
           </select>
         </div>
       )}
-
-      <div className="mb-5 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.08] px-3 py-2 text-[13px] text-white/45">
-        <Search size={14} />
-        Search...
-      </div>
 
       <div className="mb-2 ml-2 text-[10px] font-semibold uppercase tracking-wide text-white/35">
         Menu

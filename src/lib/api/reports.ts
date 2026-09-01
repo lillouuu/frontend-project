@@ -1,12 +1,41 @@
-import { apiFetchBlob } from "@/lib/apiClient";
+import { apiFetch, apiFetchBlob } from "@/lib/apiClient";
+import type {
+  ReportHistory,
+  ReportShareCreateRequest,
+  ReportShareUrl,
+  ReportShareResponse,
+} from "@/types/reports";
 
-export function getAuditReportPdf(auditId: string): Promise<Blob> {
-  return apiFetchBlob(`/api/reports/audit/${auditId}`);
+export function getReportHistory(companyId: string): Promise<ReportHistory> {
+  return apiFetch<ReportHistory>(`/api/reports/history?company_id=${companyId}`);
 }
 
-// month format: "YYYY-MM" — e.g. "2026-08"
-export function getMonthlyReportPdf(companyId: string, month: string): Promise<Blob> {
-  return apiFetchBlob(`/api/reports/monthly?company_id=${companyId}&month=${month}`);
+// Fetches any report PDF by the relative URL a HistoryEntry already
+// provides — works uniformly for audit/benchmark/monthly, and for the
+// share-token variant too (the backend appends ?share=<token> itself when
+// building history for a shared link, so this needs no special-casing).
+export function getReportPdfByUrl(relativeUrl: string): Promise<Blob> {
+  return apiFetchBlob(relativeUrl);
+}
+
+export function createReportShare(payload: ReportShareCreateRequest): Promise<ReportShareUrl> {
+  return apiFetch<ReportShareUrl>("/api/reports/share", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function revokeReportShare(token: string): Promise<ReportShareResponse> {
+  return apiFetch<ReportShareResponse>(`/api/reports/share/${token}`, {
+    method: "DELETE",
+  });
+}
+
+// Public — no auth required. Used by the /shared/[token] page. apiFetch
+// simply omits the Authorization header when there's no token in
+// localStorage, which is exactly right for an anonymous visitor here.
+export function getSharedReportHistory(token: string): Promise<ReportHistory> {
+  return apiFetch<ReportHistory>(`/api/reports/shared/${token}`);
 }
 
 export function openPdfBlob(blob: Blob) {
@@ -26,8 +55,6 @@ export function downloadPdfBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-// Helper for "Generate report" — current month in the YYYY-MM format the
-// backend expects.
 export function currentMonthString(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;

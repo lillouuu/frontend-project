@@ -143,9 +143,12 @@ export default function AuditPage() {
           )}
         </div>
         <div className="flex items-center gap-2.5">
-          <button className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+          <Link
+            href="/reports"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+          >
             <History size={14} /> History
-          </button>
+          </Link>
           <button
             onClick={runAudit}
             className="flex items-center gap-1.5 rounded-lg bg-[#0077B5] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#005f93] transition-colors"

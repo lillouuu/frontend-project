@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useOptimization } from "@/hooks/useOptimization";
+import { useAudit } from "@/hooks/useAudit";
 import { getStoredCompanyContext } from "@/lib/companyContext";
 
 // TEMPORARY FRONTEND WORKAROUND — not a real fix. The backend's critere_code
@@ -91,6 +92,31 @@ export default function OptimizationPage() {
   // bug — see guessTypeElementFromText above). Shown in the UI so this
   // never looks like a silent, confident auto-selection.
   const [guessedTypeElement, setGuessedTypeElement] = useState(false);
+
+  // NEW: real recommendations to pick from when arriving with no
+  // recommendation_id in the URL (e.g. via the sidebar). Same data source
+  // the Audit page uses — genuinely real, not a second guess layered on
+  // top of the first one.
+  const { recommendations: availableRecommendations, loading: recsLoading } = useAudit();
+
+  const selectRecommendation = (rec: { id: string; critere_code: string; action: string; raison: string }) => {
+    setRecommendationId(rec.id);
+    setActionText(rec.action);
+    setRaisonText(rec.raison);
+    setContenuActuel("");
+    setCameFromAudit(true);
+
+    if (rec.critere_code) {
+      setTypeElement(rec.critere_code);
+      setGuessedTypeElement(false);
+    } else {
+      const guess = guessTypeElementFromText(rec.action, rec.raison);
+      if (guess) {
+        setTypeElement(guess);
+        setGuessedTypeElement(true);
+      }
+    }
+  };
 
   useEffect(() => {
     const recId = searchParams.get("recommendation_id");
@@ -374,10 +400,40 @@ export default function OptimizationPage() {
               {loading ? "Génération en cours..." : "Lancer l'Optimisation"}
             </button>
             {!recommendationId && (
-              <p className="text-center text-[11px] text-slate-400">
-                Ouvrez cette page depuis une recommandation d'audit (bouton "Apply this fix")
-                pour lancer une optimisation réelle.
-              </p>
+              <div className="mt-1 space-y-2">
+                <p className="text-center text-[11px] text-slate-400">
+                  {recsLoading
+                    ? "Loading your recommendations..."
+                    : availableRecommendations.length > 0
+                    ? "Pick a recommendation to optimize:"
+                    : "No recommendations yet — run an audit first."}
+                </p>
+                {!recsLoading && availableRecommendations.length > 0 && (
+                  <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                    {availableRecommendations.map((rec) => (
+                      <button
+                        key={rec.id}
+                        type="button"
+                        onClick={() => selectRecommendation(rec)}
+                        className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 text-left text-xs hover:bg-slate-100"
+                      >
+                        <span
+                          className={`mt-0.5 flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                            rec.priorite === "CRITIQUE"
+                              ? "bg-rose-100 text-rose-700"
+                              : rec.priorite === "IMPORTANTE"
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {rec.priorite}
+                        </span>
+                        <span className="text-slate-700">{rec.action}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             {recommendationId && guessedTypeElement && (
               <p className="text-center text-[11px] text-amber-600">

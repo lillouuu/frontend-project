@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, BarChart3, PenLine, Calendar, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Sparkles, BarChart3, PenLine, Calendar, Eye, EyeOff, Loader2, X } from "lucide-react";
 import { getMyCompanies } from "@/lib/api/company";
+import { requestPasswordReset } from "@/lib/api/account";
 
 type Mode = "signin" | "signup";
 
@@ -18,6 +19,43 @@ export default function LoginPage() {
   const [accountName, setAccountName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // FIX: a logged-in user manually visiting /login used to just see the
+  // form again instead of bouncing to Dashboard. Same shallow check as the
+  // root page (token exists, not necessarily valid) — but that's fine here:
+  // if it's stale, Sidebar's real 401 check on the next page catches it and
+  // sends them right back to /login anyway, so this can't trap anyone in a
+  // broken logged-in-looking state.
+  useEffect(() => {
+    if (localStorage.getItem("token")) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
+  // FIX: "Password forgotten?" was a dead <a href="#"> — did nothing at
+  // all. POST /api/users/forgot-password is a real, confirmed endpoint.
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError(null);
+    try {
+      // Always shows the same generic message regardless of the real
+      // result — the backend deliberately never reveals whether the email
+      // exists, so the UI must not either.
+      const result = await requestPasswordReset(forgotEmail);
+      setForgotMessage(result.message);
+    } catch (err) {
+      setForgotError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,9 +297,13 @@ export default function LoginPage() {
             </div>
 
             {mode === "signin" && (
-              <a href="#" className="-mt-2 text-sm font-medium text-[#4a7aa8]">
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(true)}
+                className="-mt-2 text-left text-sm font-medium text-[#4a7aa8]"
+              >
                 Password forgotten?
-              </a>
+              </button>
             )}
 
             <button
@@ -275,6 +317,62 @@ export default function LoginPage() {
           </form>
         </div>
       </div>
+
+      {showForgotModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          onClick={() => {
+            setShowForgotModal(false);
+            setForgotMessage(null);
+            setForgotError(null);
+            setForgotEmail("");
+          }}
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-base font-bold text-slate-900">Reset your password</h3>
+              <button
+                onClick={() => {
+                  setShowForgotModal(false);
+                  setForgotMessage(null);
+                  setForgotError(null);
+                  setForgotEmail("");
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {forgotMessage ? (
+              <p className="text-sm text-slate-600">{forgotMessage}</p>
+            ) : (
+              <form onSubmit={handleForgotSubmit} className="flex flex-col gap-3">
+                <p className="text-xs text-slate-500">
+                  Enter your account email and we'll send you a link to reset your password.
+                </p>
+                <input
+                  type="email"
+                  required
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  className="rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-[#4a7aa8]"
+                />
+                {forgotError && <p className="text-xs font-medium text-rose-600">{forgotError}</p>}
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-[#4a7aa8] py-2.5 text-sm font-semibold text-white hover:bg-[#3f6a94] disabled:opacity-50"
+                >
+                  {forgotLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {forgotLoading ? "Sending..." : "Send reset link"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

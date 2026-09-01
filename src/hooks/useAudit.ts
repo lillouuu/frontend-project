@@ -8,6 +8,7 @@ import {
 } from "@/lib/api/audit";
 import { MOCK_AUDIT_DATA, MOCK_RECOMMENDATIONS } from "@/lib/mockAuditData";
 import { getCompanyData } from "@/lib/companyStorage";
+import { ApiError } from "@/lib/apiClient";
 import type { AuditResponse } from "@/types/audit";
 import type { Recommendation } from "@/types/recommendation";
 
@@ -99,11 +100,23 @@ export function useAudit() {
         await fetchRecommendationsSafely(result.id, setRecommendations);
       }
     } catch (err) {
-      console.warn("Audit creation failed, falling back to mock data:", err);
-      setError(err instanceof Error ? err.message : "Failed to load audit data");
-      setAuditData(MOCK_AUDIT_DATA);
-      setRecommendations(MOCK_RECOMMENDATIONS);
-      setIsFallback(true);
+      // FIX: plan/quota restrictions (403 — e.g. "Monthly quota reached
+      // (5/5 audits)" on Découverte) used to fall into this same mock-data
+      // fallback as a genuinely unreachable backend. That silently hid the
+      // real reason behind a fake "here's sample data" success state —
+      // exactly backwards, since a quota block is real, actionable
+      // information the person needs to see, not something to paper over.
+      if (err instanceof ApiError && err.status === 403) {
+        console.warn("Audit blocked by plan/quota restriction:", err);
+        setError(err.message);
+        setIsFallback(false);
+      } else {
+        console.warn("Audit creation failed, falling back to mock data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load audit data");
+        setAuditData(MOCK_AUDIT_DATA);
+        setRecommendations(MOCK_RECOMMENDATIONS);
+        setIsFallback(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -147,11 +160,17 @@ export function useAudit() {
       await fetchRecommendationsSafely(latest.id, setRecommendations);
       setLoading(false);
     } catch (err) {
-      console.warn("Loading latest audit failed, falling back to mock data:", err);
-      setError(err instanceof Error ? err.message : "Failed to load audit data");
-      setAuditData(MOCK_AUDIT_DATA);
-      setRecommendations(MOCK_RECOMMENDATIONS);
-      setIsFallback(true);
+      if (err instanceof ApiError && err.status === 403) {
+        console.warn("Loading audit blocked by plan/quota restriction:", err);
+        setError(err.message);
+        setIsFallback(false);
+      } else {
+        console.warn("Loading latest audit failed, falling back to mock data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load audit data");
+        setAuditData(MOCK_AUDIT_DATA);
+        setRecommendations(MOCK_RECOMMENDATIONS);
+        setIsFallback(true);
+      }
       setLoading(false);
     }
   }, [runAudit]);

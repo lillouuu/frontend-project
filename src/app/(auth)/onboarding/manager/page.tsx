@@ -107,7 +107,7 @@ export default function OnboardingManager() {
     const entrepriseRaw = getCompanyData("onboarding_entreprise", companyId);
     const entreprise = entrepriseRaw ? JSON.parse(entrepriseRaw) : null;
 
-    // Full payload matching /api/ai/audits' expected linkedin_data shape
+    // Full payload matching /api/audits' expected linkedin_data shape
     // (cahier de passation section 1.1).
     const linkedinData = {
       metadata: { version_schema: "1.0" },
